@@ -1,0 +1,44 @@
+# ======================================================
+# Smart Gateway - .gitignore
+# ======================================================
+
+# ---------- Uploaded runtime files ----------
+# Student photos and face recognition images
+uploads/face/*
+uploads/student/*
+!uploads/face/.gitkeep
+!uploads/student/.gitkeep
+!uploads/.htaccess
+
+# ---------- Local environment ----------
+.env
+.env.*
+*.local.php
+database/local_config.php
+
+# ---------- Dependencies ----------
+vendor/
+node_modules/
+
+# ---------- Logs ----------
+*.log
+logs/
+*.tmp
+
+# ---------- Cache ----------
+.cache/
+*.cache
+
+# ---------- IDE ----------
+.vscode/
+.idea/
+
+# ---------- Operating System ----------
+.DS_Store
+Thumbs.db
+
+# ---------- PHPUnit ----------
+.phpunit.result.cache
+
+# ---------- Composer ----------
+composer.phar
