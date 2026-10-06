@@ -50,7 +50,7 @@ $sgIsLocalEnv = (
 // =====================================================================
 $sgLocalDb = [
     'host'    => 'localhost',
-    'name'    => 'smart_gateway_v1_8',
+    'name'    => 'smartgatewayproject_dev',
     'user'    => 'root',
     'pass'    => '',              // XAMPP default MySQL password is empty
 ];
@@ -61,9 +61,9 @@ $sgLocalDb = [
 // =====================================================================
 $sgProductionDb = [
     'host'    => 'localhost',                  // usually still 'localhost' even on shared hosting
-    'name'    => 'u483372788_Smart_gateway',          // e.g. u123456_smart_gateway
-    'user'    => 'u483372788_smartgateway',          // e.g. u123456_sguser
-    'pass'    => 'Janelyn@18',
+    'name'    => 'CHANGE_ME_db_name',          // e.g. u123456_smartgatewayproject_dev
+    'user'    => 'CHANGE_ME_db_user',          // e.g. u123456_sguser
+    'pass'    => 'CHANGE_ME_db_password',
 ];
 
 $sgDbConfig = $sgIsLocalEnv ? $sgLocalDb : $sgProductionDb;
@@ -161,15 +161,21 @@ function e($value) {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-// ---- Auth guard: require an active session (also enforces idle session timeout) ----
-function require_login() {
+// ---- Shared inactivity-timeout check, used by BOTH page guards (require_login,
+// which redirects) and JSON API guards (which must respond with JSON, never a
+// redirect). Keeping this in one place is what makes "the configured timeout
+// applies to pages AND APIs" true instead of two competing implementations
+// that could drift apart.
+// Returns true and refreshes last_activity if the session is still valid.
+// Returns false (after destroying the session) if it had already expired.
+// Returns false without destroying anything if there was no session to begin with.
+function sg_enforce_session_timeout(): bool {
     if (empty($_SESSION['user_id'])) {
-        header('Location: ' . APP_URL . '/login.php');
-        exit;
+        return false;
     }
 
     global $pdo;
-    $timeoutMinutes = (int) get_setting($pdo, 'session_timeout_minutes', 30);
+    $timeoutMinutes = (int) get_setting($pdo, 'session_timeout_minutes', 20);
     if (!empty($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > ($timeoutMinutes * 60)) {
         $username = $_SESSION['username'] ?? null;
         $_SESSION = [];
@@ -178,10 +184,26 @@ function require_login() {
             // Best-effort log; session is already gone so pass username explicitly
             log_activity($pdo, 'Session Expired', 'Auto-logout after ' . $timeoutMinutes . ' minutes of inactivity', $username);
         }
-        header('Location: ' . APP_URL . '/login.php?notice=session_expired');
-        exit;
+        return false;
     }
     $_SESSION['last_activity'] = time();
+    return true;
+}
+
+// ---- Auth guard: require an active session (also enforces idle session timeout) ----
+function require_login() {
+    $hadSession = !empty($_SESSION['user_id']);
+    if (!sg_enforce_session_timeout()) {
+        header('Location: ' . APP_URL . '/login.php' . ($hadSession ? '?notice=session_expired' : ''));
+        exit;
+    }
+}
+
+// ---- Auth guard for JSON API endpoints: same inactivity-timeout enforcement
+// as require_login(), but never redirects (APIs can't follow one) — callers
+// check the return value and emit their own JSON error response instead.
+function require_login_api(): bool {
+    return sg_enforce_session_timeout();
 }
 
 // ---- Resolve the correct dashboard URL for a given role ----
