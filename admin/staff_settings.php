@@ -61,15 +61,16 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
         </div>
 
-        <div class="row g-3 align-items-start">
-            <!-- PHASE 6: the "Appearance" theme dropdown here saved to a
-                 user_theme_<id> setting that nothing in the app ever reads --
-                 the actual dark/light toggle (shared with Admin) lives in the
-                 topbar and uses localStorage, independently of this control.
-                 Removed as dead/non-functional rather than leaving a
-                 System-Appearance-style control on the Staff-facing page;
-                 the real theme toggle is untouched and still works for Staff. -->
-            <div class="col-lg-12">
+
+        <div class="sg-settings-category-nav" role="navigation" aria-label="Staff settings categories">
+            <button type="button" class="sg-settings-category-btn" data-settings-target="access"><i class="bi bi-shield-check"></i><span>Access Level</span></button>
+            <button type="button" class="sg-settings-category-btn" data-settings-target="system"><i class="bi bi-toggles"></i><span>System Settings</span></button>
+            <button type="button" class="sg-settings-category-btn" data-settings-target="scanner"><i class="bi bi-upc-scan"></i><span>Scanner &amp; Access</span></button>
+            <button type="button" class="sg-settings-category-btn" data-settings-target="information"><i class="bi bi-info-circle"></i><span>System Information</span></button>
+        </div>
+
+        <div class="sg-settings-panels">
+        <section class="sg-settings-panel" data-settings-category="access">
                 <div class="sg-card">
                     <h5 class="fw-bold mb-2">Access Level</h5>
                     <div class="d-flex align-items-center gap-3">
@@ -79,11 +80,8 @@ require_once __DIR__ . '/../includes/header.php';
                     <hr>
                     <div class="small text-muted"><i class="bi bi-lock-fill me-1"></i>General school information, user management, security timeouts, kiosk permission management and SMS provider credentials remain Administrator-only.</div>
                 </div>
-            </div>
-        </div>
-
-        <div class="row g-3 mt-3 align-items-start">
-            <div class="col-lg-6">
+        </section>
+        <section class="sg-settings-panel" data-settings-category="system">
                 <div class="sg-card">
                     <h5 class="fw-bold mb-1">System Settings</h5>
                     <p class="text-muted small mb-3">Staff may manage operational feature toggles and log retention.</p>
@@ -107,8 +105,8 @@ require_once __DIR__ . '/../includes/header.php';
                         <button type="submit" class="btn btn-sg-primary"><i class="bi bi-check2 me-1"></i>Save System Settings</button>
                     </form>
                 </div>
-            </div>
-            <div class="col-lg-6">
+        </section>
+        <section class="sg-settings-panel" data-settings-category="scanner">
                 <div class="sg-card">
                     <h5 class="fw-bold mb-1">Scanner &amp; Access Settings</h5>
                     <p class="text-muted small mb-3">Tune scanner timing and when automatic facial fallback becomes available.</p>
@@ -121,9 +119,8 @@ require_once __DIR__ . '/../includes/header.php';
                         <button type="submit" class="btn btn-sg-primary"><i class="bi bi-check2 me-1"></i>Save Scanner Settings</button>
                     </form>
                 </div>
-            </div>
-        </div>
-
+        </section>
+        <section class="sg-settings-panel" data-settings-category="information">
         <div class="sg-card mt-3">
             <h5 class="fw-bold mb-1">System Information</h5>
             <div class="row g-3 mt-1">
@@ -131,6 +128,9 @@ require_once __DIR__ . '/../includes/header.php';
                 <div class="col-md-6"><span class="text-muted small d-block">Current Role</span><strong>Staff</strong></div>
             </div>
         </div>
+        </section>
+        </div>
     </main>
 </div>
+<script src="<?= APP_URL ?>/assets/js/settings.js"></script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

@@ -66,11 +66,27 @@ function renderStudentsTable(students) {
 function renderPagination(total, page, perPage) {
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     const ul = document.getElementById('studentsPagination');
-    let html = '';
-    for (let i = 1; i <= totalPages; i++) {
-        html += `<li class="page-item ${i === page ? 'active' : ''}"><a class="page-link" href="#" onclick="loadStudents(${i});return false;">${i}</a></li>`;
-    }
-    ul.innerHTML = html;
+    if (!ul) return;
+
+    const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+    const previousDisabled = safePage <= 1;
+    const nextDisabled = safePage >= totalPages;
+
+    ul.innerHTML = `
+        <li class="page-item${previousDisabled ? ' disabled' : ''}">
+            <a class="page-link sg-pagination-arrow" href="#"
+               aria-label="Previous page" title="Previous page"
+               ${previousDisabled ? 'aria-disabled="true" tabindex="-1"' : `onclick="loadStudents(${safePage - 1}); return false;"`}>
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+            </a>
+        </li>
+        <li class="page-item${nextDisabled ? ' disabled' : ''}">
+            <a class="page-link sg-pagination-arrow" href="#"
+               aria-label="Next page" title="Next page"
+               ${nextDisabled ? 'aria-disabled="true" tabindex="-1"' : `onclick="loadStudents(${safePage + 1}); return false;"`}>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </a>
+        </li>`;
 }
 
 // ---- Search / filter listeners ----

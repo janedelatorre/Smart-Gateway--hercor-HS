@@ -160,8 +160,18 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
         </div>
 
-        <div class="row g-3">
-            <div class="col-lg-6">
+
+        <div class="sg-settings-category-nav" role="navigation" aria-label="Settings categories">
+            <button type="button" class="sg-settings-category-btn" data-settings-target="general"><i class="bi bi-sliders2"></i><span>General</span></button>
+            <button type="button" class="sg-settings-category-btn" data-settings-target="system"><i class="bi bi-toggles"></i><span>System</span></button>
+            <button type="button" class="sg-settings-category-btn" data-settings-target="security"><i class="bi bi-shield-lock"></i><span>Security</span></button>
+            <button type="button" class="sg-settings-category-btn" data-settings-target="kiosk-access"><i class="bi bi-pc-display"></i><span>Kiosk Access</span></button>
+            <button type="button" class="sg-settings-category-btn" data-settings-target="scanner"><i class="bi bi-upc-scan"></i><span>Scanner &amp; Access</span></button>
+            <button type="button" class="sg-settings-category-btn" data-settings-target="sms"><i class="bi bi-chat-square-text"></i><span>SMS Provider</span></button>
+        </div>
+
+        <div class="sg-settings-panels">
+        <section class="sg-settings-panel" data-settings-category="general" aria-label="General settings">
                 <div class="sg-card sg-general-settings">
                     <h5 class="fw-bold mb-3">General Settings</h5>
                     <form method="POST">
@@ -190,9 +200,8 @@ require_once __DIR__ . '/../includes/header.php';
                         <button type="submit" class="btn btn-sg-primary">Save Changes</button>
                     </form>
                 </div>
-            </div>
-
-            <div class="col-lg-6">
+        </section>
+        <section class="sg-settings-panel" data-settings-category="system" aria-label="System settings">
                 <div class="sg-card mb-3">
                     <h5 class="fw-bold mb-3">System Settings</h5>
                     <form method="POST">
@@ -222,6 +231,8 @@ require_once __DIR__ . '/../includes/header.php';
                     </form>
                 </div>
 
+        </section>
+        <section class="sg-settings-panel" data-settings-category="security" aria-label="Security settings">
                 <div class="sg-card mb-3">
                     <h5 class="fw-bold mb-3">Security</h5>
                     <form method="POST">
@@ -241,6 +252,8 @@ require_once __DIR__ . '/../includes/header.php';
                     </form>
                 </div>
 
+        </section>
+        <section class="sg-settings-panel" data-settings-category="kiosk-access" aria-label="Kiosk Access settings">
                 <div class="sg-card mb-3">
                     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
                         <div>
@@ -268,6 +281,8 @@ require_once __DIR__ . '/../includes/header.php';
                     </form>
                 </div>
 
+        </section>
+        <section class="sg-settings-panel" data-settings-category="kiosk-station" aria-label="Kiosk Station settings">
                 <div class="sg-card mb-3">
                     <h5 class="fw-bold mb-3">Kiosk Station</h5>
                     <p class="text-muted small mb-3">Manage authorized scanner stations. Kiosk timeout remains separate from the Admin/Staff session timeout above.</p>
@@ -303,6 +318,8 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
                 </div>
 
+        </section>
+        <section class="sg-settings-panel" data-settings-category="scanner" aria-label="Scanner settings">
                 <div class="sg-card mb-3">
                     <h5 class="fw-bold mb-3">Scanner &amp; Access Settings</h5>
                     <form method="POST">
@@ -327,6 +344,8 @@ require_once __DIR__ . '/../includes/header.php';
                     </form>
                 </div>
 
+        </section>
+        <section class="sg-settings-panel" data-settings-category="sms" aria-label="Sms settings">
                 <div class="sg-card">
                     <h5 class="fw-bold mb-3">SMS Provider (API)</h5>
                     <form method="POST">
@@ -350,7 +369,9 @@ require_once __DIR__ . '/../includes/header.php';
                     </form>
                 </div>
             </div>
+        </section>
         </div>
     </main>
 </div>
+<script src="<?= APP_URL ?>/assets/js/settings.js"></script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
