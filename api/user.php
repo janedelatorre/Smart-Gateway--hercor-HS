@@ -7,7 +7,7 @@
 require_once __DIR__ . '/../database/config.php';
 header('Content-Type: application/json');
 
-if (empty($_SESSION['user_id'])) {
+if (!require_login_api()) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized.']); exit;
 }
 if (($_SESSION['role'] ?? '') !== 'Administrator') {
@@ -36,7 +36,7 @@ try {
             $count->execute($params);
             $total = (int) $count->fetchColumn();
 
-            $stmt = $pdo->prepare("SELECT id, username, fullname, email, contact_number, role, status FROM users $where ORDER BY fullname ASC LIMIT $perPage OFFSET $offset");
+            $stmt = $pdo->prepare("SELECT id, username, fullname, first_name, last_name, staff_id, profile_picture, email, contact_number, role, status FROM users $where ORDER BY fullname ASC LIMIT $perPage OFFSET $offset");
             $stmt->execute($params);
             echo json_encode(['success' => true, 'data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'per_page' => $perPage]);
             break;
@@ -55,6 +55,9 @@ try {
             $role     = in_array($_POST['role'] ?? '', ['Administrator','Staff']) ? $_POST['role'] : 'Staff';
             $status   = in_array($_POST['status'] ?? '', ['Active','Inactive']) ? $_POST['status'] : 'Active';
             $password = (string) ($_POST['password'] ?? '');
+            $firstName = trim($_POST['first_name'] ?? '');
+            $lastName = trim($_POST['last_name'] ?? '');
+            $staffId = trim($_POST['staff_id'] ?? '');
 
             if ($username === '' || $fullname === '') {
                 echo json_encode(['success' => false, 'message' => 'Username and Full Name are required.']); exit;
@@ -82,8 +85,8 @@ try {
                 }
                 $algo = defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT;
                 $hash = password_hash($password, $algo);
-                $stmt = $pdo->prepare("INSERT INTO users (username, password, fullname, email, contact_number, role, status) VALUES (?,?,?,?,?,?,?)");
-                $stmt->execute([$username, $hash, $fullname, $email, $contact, $role, $status]);
+                $stmt = $pdo->prepare("INSERT INTO users (username, password, fullname, first_name, last_name, staff_id, email, contact_number, role, status) VALUES (?,?,?,?,?,?,?,?,?,?)");
+                $stmt->execute([$username, $hash, $fullname, $firstName !== '' ? $firstName : null, $lastName !== '' ? $lastName : null, $staffId !== '' ? $staffId : null, $email, $contact, $role, $status]);
                 log_activity($pdo, 'User Created', "Created user '{$username}' (role: {$role})");
                 echo json_encode(['success' => true, 'message' => 'User created successfully.']);
             } else {
@@ -96,12 +99,12 @@ try {
                     if (is_password_reused($pdo, $id, $password)) {
                         echo json_encode(['success' => false, 'message' => 'That password was used recently. Please choose a different one.']); exit;
                     }
-                    $stmt = $pdo->prepare("UPDATE users SET username=?, fullname=?, email=?, contact_number=?, role=?, status=? WHERE id=?");
-                    $stmt->execute([$username, $fullname, $email, $contact, $role, $status, $id]);
+                    $stmt = $pdo->prepare("UPDATE users SET username=?, fullname=?, first_name=?, last_name=?, staff_id=?, email=?, contact_number=?, role=?, status=? WHERE id=?");
+                    $stmt->execute([$username, $fullname, $firstName !== '' ? $firstName : null, $lastName !== '' ? $lastName : null, $staffId !== '' ? $staffId : null, $email, $contact, $role, $status, $id]);
                     set_user_password($pdo, $id, $password);
                 } else {
-                    $stmt = $pdo->prepare("UPDATE users SET username=?, fullname=?, email=?, contact_number=?, role=?, status=? WHERE id=?");
-                    $stmt->execute([$username, $fullname, $email, $contact, $role, $status, $id]);
+                    $stmt = $pdo->prepare("UPDATE users SET username=?, fullname=?, first_name=?, last_name=?, staff_id=?, email=?, contact_number=?, role=?, status=? WHERE id=?");
+                    $stmt->execute([$username, $fullname, $firstName !== '' ? $firstName : null, $lastName !== '' ? $lastName : null, $staffId !== '' ? $staffId : null, $email, $contact, $role, $status, $id]);
                 }
                 log_activity($pdo, 'User Updated', "Updated user '{$username}' (id: {$id})");
                 echo json_encode(['success' => true, 'message' => 'User updated successfully.']);

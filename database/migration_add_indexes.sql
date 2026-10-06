@@ -2,8 +2,8 @@
 -- MIGRATION: Add performance indexes (production readiness review)
 -- =====================================================================
 -- For EXISTING installations only. Fresh installs already get these
--- indexes from database.sql. Run this once against your existing
--- database (phpMyAdmin > SQL tab, or `mysql -u root smart_gateway_v1_8 <
+-- indexes from smart database.sql. Run this once against your existing
+-- database (phpMyAdmin > SQL tab, or `mysql -u root smartgatewayproject_dev <
 -- database/migration_add_indexes.sql`).
 --
 -- Safe to run once; re-running will error with "Duplicate key name" if

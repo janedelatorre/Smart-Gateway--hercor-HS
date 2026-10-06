@@ -4,6 +4,7 @@ require_admin(); // Only Administrators can manage users
 
 $pageTitle = 'Users';
 $pageHeading = 'Users';
+$pageSubheading = 'Manage authorized Smart Gateway system accounts';
 $activePage = 'users';
 $csrf = generate_csrf_token();
 require_once __DIR__ . '/../includes/header.php';
@@ -16,13 +17,13 @@ require_once __DIR__ . '/../includes/header.php';
         <input type="hidden" id="csrfToken" value="<?= e($csrf) ?>">
         <div class="sg-card">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h5 class="fw-bold mb-0">Users</h5>
+                
                 <button class="btn btn-sg-primary" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openAddUser()">
                     <i class="bi bi-plus-lg me-1"></i>Add User
                 </button>
             </div>
 
-            <div class="input-group mb-3" style="max-width:320px;">
+            <div class="input-group mb-3" style="max-width:280px;">
                 <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
                 <input type="text" id="searchUser" class="form-control" placeholder="Search user....">
             </div>
@@ -46,7 +47,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 <!-- Add / Edit User Modal -->
 <div class="modal fade" id="userModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
     <div class="modal-content rounded-sg">
       <div class="modal-header">
         <h5 class="modal-title fw-bold" id="userModalTitle">Add User</h5>
@@ -90,7 +91,7 @@ require_once __DIR__ . '/../includes/header.php';
           </div>
           <div class="mb-3" id="passwordGroup">
               <label class="form-label">Password <span id="passwordHint" class="text-muted small"></span></label>
-              <input type="password" name="password" class="form-control" placeholder="Enter password">
+              <input type="password" name="password" class="form-control" placeholder="Enter password" minlength="6" autocomplete="new-password">
           </div>
         </div>
         <div class="modal-footer">

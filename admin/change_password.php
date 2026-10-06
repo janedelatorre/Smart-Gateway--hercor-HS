@@ -13,6 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $pageTitle = 'Change Password';
 $pageHeading = 'Change Password';
+$pageSubheading = 'Update your account password and security credentials';
 $activePage = 'settings';
 $csrf = generate_csrf_token();
 require_once __DIR__ . '/../includes/header.php';
@@ -21,7 +22,10 @@ require_once __DIR__ . '/../includes/header.php';
 <div class="sg-content">
     <?php require_once __DIR__ . '/../includes/navbar.php'; ?>
 
-    <main class="sg-main d-flex justify-content-center">
+    <main class="sg-main d-flex flex-column align-items-center">
+        <div class="mb-3" style="max-width:480px; width:100%;">
+            <a href="<?= APP_URL ?>/admin/settings.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Account Settings</a>
+        </div>
         <div class="sg-card" style="max-width:480px; width:100%;">
             <?= $message ?>
             <h5 class="fw-bold mb-3">Change Password</h5>

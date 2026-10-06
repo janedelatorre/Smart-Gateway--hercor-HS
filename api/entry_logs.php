@@ -7,7 +7,7 @@
 require_once __DIR__ . '/../database/config.php';
 header('Content-Type: application/json');
 
-if (empty($_SESSION['user_id'])) {
+if (!require_login_api()) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized.']);
     exit;
 }
@@ -28,6 +28,8 @@ try {
     $dateTo   = trim($_GET['date_to'] ?? '');
     $status   = trim($_GET['status'] ?? '');
     $method   = trim($_GET['method'] ?? '');
+    $type     = trim($_GET['transaction_type'] ?? '');
+    $grade    = trim($_GET['grade'] ?? '');
 
     $where = [];
     $params = [];
@@ -40,6 +42,8 @@ try {
     if ($dateTo !== '')   { $where[] = "DATE(time_in) <= ?"; $params[] = $dateTo; }
     if ($status !== '')   { $where[] = "status = ?"; $params[] = $status; }
     if ($method !== '')   { $where[] = "verification_method = ?"; $params[] = $method; }
+    if ($type !== '' && in_array($type, ['Entry', 'Exit'], true)) { $where[] = "transaction_type = ?"; $params[] = $type; }
+    if ($grade !== '')    { $where[] = "grade = ?"; $params[] = $grade; }
 
     $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 

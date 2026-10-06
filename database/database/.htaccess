@@ -1,2 +1,0 @@
-# Deny all direct web access to this folder (contains DB credentials & schema)
-Require all denied

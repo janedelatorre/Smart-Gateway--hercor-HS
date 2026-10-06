@@ -8,12 +8,52 @@
 require_once __DIR__ . '/../database/config.php';
 header('Content-Type: application/json');
 
-if (empty($_SESSION['user_id'])) {
+if (!require_login_api()) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized. Please log in again.']);
     exit;
 }
+if (($_SESSION['role'] ?? '') !== 'Administrator') {
+    echo json_encode(['success' => false, 'message' => 'Access denied. Administrator role required.']);
+    exit;
+}
+
+const SG_STUDENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024; // same 5 MB ceiling this endpoint already used
+
+/**
+ * Validate an uploaded STUDENT PROFILE PHOTO (formal display photo — stored in
+ * students.photo). This is unrelated to the facial-recognition descriptor
+ * (students.face_encoding), which arrives separately as `face_descriptor`.
+ * Returns ['ok' => true, 'ext' => 'jpg'|'png'|'webp'] or ['ok' => false, 'message' => ...].
+ * Real MIME is detected server-side from the file content, never from the client's claim.
+ */
+function sg_validate_profile_photo(array $file): array {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_INI_SIZE || ($file['error'] ?? 0) === UPLOAD_ERR_FORM_SIZE) {
+        return ['ok' => false, 'message' => 'Profile photo must be 5 MB or smaller.'];
+    }
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+        return ['ok' => false, 'message' => 'The profile photo could not be uploaded.'];
+    }
+    if (($file['size'] ?? 0) > SG_STUDENT_PHOTO_MAX_BYTES) {
+        return ['ok' => false, 'message' => 'Profile photo must be 5 MB or smaller.'];
+    }
+    $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+    if (!isset($allowed[$mime]) || @getimagesize($file['tmp_name']) === false) {
+        return ['ok' => false, 'message' => 'Profile photo must be a JPG, PNG, or WEBP image.'];
+    }
+    return ['ok' => true, 'ext' => $allowed[$mime]];
+}
+
+/** Save a validated profile photo under a random server-generated name; returns the filename stored in students.photo, or null. */
+function sg_store_profile_photo(array $file, string $ext): ?string {
+    $dir = __DIR__ . '/../uploads/student/';
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $filename = 'std_' . bin2hex(random_bytes(12)) . '.' . $ext;
+    return move_uploaded_file($file['tmp_name'], $dir . $filename) ? $filename : null;
+}
 
 $action = $_REQUEST['action'] ?? '';
+$newPhotoFilename = null; // set once a new profile photo is written, so it can be cleaned up if the save then fails
 
 try {
     switch ($action) {
@@ -40,7 +80,8 @@ try {
             $countStmt->execute($params);
             $total = (int) $countStmt->fetchColumn();
 
-            $stmt = $pdo->prepare("SELECT id, student_id, fullname, grade, section, contact_number, guardian_name, email, photo, status
+            $stmt = $pdo->prepare("SELECT id, student_id, fullname, grade, section, contact_number, guardian_name, email, photo, status,
+                                    (face_encoding IS NOT NULL AND face_encoding <> '') AS has_face
                                     FROM students $whereSql ORDER BY fullname ASC LIMIT $perPage OFFSET $offset");
             $stmt->execute($params);
             $data = $stmt->fetchAll();
@@ -67,7 +108,6 @@ try {
             $email          = trim($_POST['email'] ?? '');
             $status         = in_array($_POST['status'] ?? '', ['Active','Inactive']) ? $_POST['status'] : 'Active';
             $faceDescriptor = trim($_POST['face_descriptor'] ?? '');
-            $photoData      = trim($_POST['photo_data'] ?? '');
 
             if ($studentId === '' || $fullname === '' || $grade === '' || $contact === '') {
                 echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']); exit;
@@ -77,22 +117,31 @@ try {
                 echo json_encode(['success' => false, 'message' => 'Invalid email address format.']); exit;
             }
 
-            // Validate contact number format (basic PH mobile format)
-            if (!preg_match('/^[0-9+\-\s]{7,15}$/', $contact)) {
-                echo json_encode(['success' => false, 'message' => 'Invalid contact number format.']); exit;
+            // PHASE 3: canonical PH mobile format. Accepts 09XXXXXXXXX,
+            // +639XXXXXXXXX, 639XXXXXXXXX as input; normalizes to
+            // 09XXXXXXXXX before it ever reaches the students table, so
+            // every number written FROM THIS POINT FORWARD is guaranteed
+            // canonical. sg_normalize_ph_mobile() never guesses -- it
+            // returns null for anything else (wrong length, wrong prefix,
+            // letters, etc.) and this rejects the save rather than storing
+            // something sg_send_sms() would just turn around and reject.
+            $normalizedContact = sg_normalize_ph_mobile($contact);
+            if ($normalizedContact === null) {
+                echo json_encode(['success' => false, 'message' => 'Invalid contact number. Use 09XXXXXXXXX (11 digits) or +639XXXXXXXXX.']); exit;
             }
+            $contact = $normalizedContact;
 
-            // Handle base64 captured photo (validated + saved as JPEG)
-            $photoFilename = null;
-            if ($photoData && preg_match('/^data:image\/(jpeg|png);base64,/', $photoData)) {
-                $imgData = substr($photoData, strpos($photoData, ',') + 1);
-                $imgBinary = base64_decode($imgData, true);
-                if ($imgBinary !== false && strlen($imgBinary) < 5 * 1024 * 1024 && @getimagesizefromstring($imgBinary) !== false) { // 5MB limit + genuine image check
-                    $photoFilename = 'std_' . preg_replace('/[^A-Za-z0-9_\-]/', '', $studentId) . '_' . time() . '.jpg';
-                    $uploadDir = __DIR__ . '/../uploads/student/';
-                    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                    file_put_contents($uploadDir . $photoFilename, $imgBinary);
+            // STUDENT PROFILE PHOTO (students.photo) — validated here, written only after the
+            // ID/duplicate checks below pass. Independent of the face descriptor.
+            $photoFile = null;
+            $photoExt = null;
+            if (!empty($_FILES['profile_photo']['name'])) {
+                $check = sg_validate_profile_photo($_FILES['profile_photo']);
+                if (!$check['ok']) {
+                    echo json_encode(['success' => false, 'message' => $check['message']]); exit;
                 }
+                $photoFile = $_FILES['profile_photo'];
+                $photoExt = $check['ext'];
             }
 
             if ($action === 'create') {
@@ -100,6 +149,12 @@ try {
                 $dupe->execute([$studentId]);
                 if ($dupe->fetch()) {
                     echo json_encode(['success' => false, 'message' => 'Student ID already exists.']); exit;
+                }
+
+                $photoFilename = null;
+                if ($photoFile) {
+                    $photoFilename = $newPhotoFilename = sg_store_profile_photo($photoFile, $photoExt);
+                    if (!$photoFilename) { echo json_encode(['success' => false, 'message' => 'The profile photo could not be saved.']); exit; }
                 }
 
                 $stmt = $pdo->prepare("INSERT INTO students (student_id, fullname, grade, section, contact_number, guardian_name, email, photo, face_encoding, status)
@@ -120,6 +175,14 @@ try {
                 $existing->execute([$id]);
                 $oldPhoto = $existing->fetchColumn();
 
+                $photoFilename = null;
+                if ($photoFile) {
+                    $photoFilename = $newPhotoFilename = sg_store_profile_photo($photoFile, $photoExt);
+                    if (!$photoFilename) { echo json_encode(['success' => false, 'message' => 'The profile photo could not be saved.']); exit; }
+                }
+
+                // photo and face_encoding are updated independently: photo only when a new
+                // profile photo was uploaded; face_encoding only when a new descriptor was captured.
                 if ($photoFilename) {
                     $stmt = $pdo->prepare("UPDATE students SET student_id=?, fullname=?, grade=?, section=?, contact_number=?, guardian_name=?, email=?, photo=?, face_encoding=COALESCE(NULLIF(?,''), face_encoding), status=? WHERE id=?");
                     $stmt->execute([$studentId, $fullname, $grade, $section, $contact, $guardian, $email, $photoFilename, $faceDescriptor, $status, $id]);
@@ -167,6 +230,9 @@ try {
             echo json_encode(['success' => false, 'message' => 'Unknown action.']);
     }
 } catch (Throwable $e) {
+    if ($newPhotoFilename && is_file(__DIR__ . '/../uploads/student/' . $newPhotoFilename)) {
+        @unlink(__DIR__ . '/../uploads/student/' . $newPhotoFilename); // don't leave an orphan file if the DB write failed
+    }
     error_log('student.php error: ' . $e->getMessage());
     echo json_encode(['success' => false, 'message' => 'A server error occurred. Please try again.']);
 }

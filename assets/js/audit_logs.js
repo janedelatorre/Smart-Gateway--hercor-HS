@@ -81,9 +81,9 @@ function renderAuditTable(rows) {
         const dt = new Date(r.created_at.replace(' ', 'T'));
         return `<tr>
             <td>${dt.toLocaleString()}</td>
-            <td>${r.username ?? 'System'}</td>
+            <td>${sgEscapeHtml(r.username ?? 'System')}</td>
             <td>${auditBadge(r.action)}</td>
-            <td>${r.description ?? '-'}</td>
+            <td>${sgEscapeHtml(r.description ?? '-')}</td>
             
         </tr>`;
     }).join('');

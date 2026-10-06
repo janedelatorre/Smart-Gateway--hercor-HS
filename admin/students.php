@@ -1,9 +1,10 @@
 <?php
 require_once __DIR__ . '/../database/config.php';
-require_login();
+require_admin();
 
 $pageTitle = 'Students';
 $pageHeading = 'Students';
+$pageSubheading = 'Manage registered student profiles and verification data';
 $activePage = 'students';
 $csrf = generate_csrf_token();
 require_once __DIR__ . '/../includes/header.php';
@@ -15,7 +16,7 @@ require_once __DIR__ . '/../includes/header.php';
     <main class="sg-main">
         <div class="sg-card">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h5 class="fw-bold mb-0">Students</h5>
+                
                 <button class="btn btn-sg-primary" data-bs-toggle="modal" data-bs-target="#studentModal" onclick="openAddStudent()">
                     <i class="bi bi-plus-lg me-1"></i>Add Students
                 </button>
@@ -98,7 +99,9 @@ require_once __DIR__ . '/../includes/header.php';
               </div>
               <div class="mb-3">
                 <label class="form-label">Contact Number</label>
-                <input type="text" name="contact_number" class="form-control" placeholder="09xxxxxxxxx" required>
+                <input type="text" name="contact_number" class="form-control" placeholder="09xxxxxxxxx"
+                       pattern="^(09\d{9}|\+639\d{9}|639\d{9})$" maxlength="13" required>
+                <small class="text-muted">Format: 09XXXXXXXXX (11 digits). +639XXXXXXXXX is also accepted and will be converted automatically.</small>
               </div>
               <div class="mb-3">
                 <label class="form-label">Guardian Name</label>
@@ -118,6 +121,14 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
 
             <div class="col-md-5 text-center">
+              <h6 class="fw-bold mb-3">Student Profile Photo</h6>
+              <div class="rounded-sg mb-2 d-flex align-items-center justify-content-center bg-light" style="height:160px; overflow:hidden;">
+                <img id="profilePhotoPreview" class="w-100 h-100 d-none" style="object-fit:cover;" alt="Student profile photo">
+                <i id="profilePhotoPlaceholder" class="bi bi-person-badge text-secondary" style="font-size:4rem;"></i>
+              </div>
+              <input type="file" name="profile_photo" id="profilePhotoInput" class="form-control form-control-sm mb-1" accept="image/jpeg,image/png,image/webp">
+              <p class="small text-muted mb-4">Formal photo (JPG, PNG or WEBP, max 5 MB) shown on the student profile and after verification. <strong>Not</strong> used for face recognition. Leave empty to keep the current photo.</p>
+
               <h6 class="fw-bold mb-3">Capture Face</h6>
               <div id="captureBox" class="rounded-sg mb-2 d-flex align-items-center justify-content-center bg-light" style="height:220px; overflow:hidden;">
                 <video id="video" autoplay playsinline class="w-100 h-100 d-none" style="object-fit:cover;"></video>
@@ -125,13 +136,13 @@ require_once __DIR__ . '/../includes/header.php';
                 <i id="capturePlaceholder" class="bi bi-person-circle text-secondary" style="font-size:5rem;"></i>
               </div>
               <canvas id="captureCanvas" class="d-none"></canvas>
-              <input type="hidden" name="photo_data" id="photoDataInput">
               <div class="d-grid gap-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="startCameraBtn"><i class="bi bi-camera-fill me-1"></i>Open Camera</button>
                 <button type="button" class="btn btn-success btn-sm d-none" id="captureBtn">Capture Photo</button>
                 <button type="button" class="btn btn-link btn-sm d-none" id="retakeBtn">Retake</button>
               </div>
-              <p class="small text-muted mt-2 mb-0">Used only as <strong>backup facial recognition</strong> if the barcode fails to scan.</p>
+              <p class="small text-muted mt-2 mb-0">Used only as <strong>backup facial recognition</strong> if the barcode fails to scan. Capturing does not change the profile photo.</p>
+              <p class="small text-success mt-1 mb-0 d-none" id="faceOnFileNote"><i class="bi bi-check-circle-fill me-1"></i>Face data on file &mdash; capture again only to replace it.</p>
             </div>
           </div>
         </div>
@@ -144,6 +155,9 @@ require_once __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="<?= APP_URL ?>/assets/vendor/face-api/face-api.min.js"></script>
+<script>
+    window.SG_APP_URL = <?= json_encode(APP_URL) ?>;
+</script>
 <script src="<?= APP_URL ?>/assets/js/students.js"></script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

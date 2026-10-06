@@ -10,7 +10,7 @@
 require_once __DIR__ . '/../database/config.php';
 header('Content-Type: application/json');
 
-if (empty($_SESSION['user_id'])) {
+if (!require_login_api()) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized.']); exit;
 }
 

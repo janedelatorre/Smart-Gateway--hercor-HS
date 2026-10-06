@@ -1,7 +1,0 @@
-# Prevent any script execution inside the uploads directory.
-# Only static image files should ever be served from here.
-<FilesMatch "\.(php|php\d|phtml|pl|py|cgi|sh|asp|aspx)$">
-    Require all denied
-</FilesMatch>
-
-Options -Indexes

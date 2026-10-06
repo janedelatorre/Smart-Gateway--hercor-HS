@@ -29,12 +29,12 @@ smart-gateway/
 │   └── face/
 ├── admin/
 │   ├── dashboard.php   students.php   entry_logs.php   reports.php
-│   ├── users.php       settings.php   profile.php      change_password.php
+│   ├── users.php       settings.php   profile.php      profile.php
 │   ├── scanner.php     logout.php
 ├── includes/
 │   ├── header.php  sidebar.php  navbar.php  footer.php
 ├── database/
-│   ├── config.php   database.sql
+│   ├── config.php   smart database.sql
 ├── api/
 │   ├── student.php  scan.php  sms.php  face.php  user.php  entry_logs.php
 ├── login.php
@@ -49,8 +49,8 @@ smart-gateway/
 1. Install [XAMPP](https://www.apachefriends.org/) and start **Apache** + **MySQL**.
 2. Copy the `smart-gateway` folder into `C:/xampp/htdocs/` (Windows) or `/Applications/XAMPP/htdocs/` (Mac).
 3. Open **phpMyAdmin** (`http://localhost/phpmyadmin`), create nothing manually — instead:
-   - Click **Import**, choose `database/database.sql`, and run it.
-   - This creates the `smart_gateway` database with all tables and seed data.
+   - Click **Import**, choose `database/smart database.sql`, and run it.
+   - This creates the `smartgatewayproject_dev` database with all tables and seed data.
 4. `database/config.php` is **environment-aware** — it auto-detects whether it's running on
    `localhost`, a LAN IP (192.168.x.x / 10.x.x.x), or a real domain, and picks the matching
    database credentials automatically. The local/XAMPP defaults (`root` / empty password)
@@ -65,7 +65,7 @@ smart-gateway/
 | staff1   | admin123  | Staff         |
 | staff2   | admin123  | Staff         |
 
-**Change these passwords immediately after first login** (Profile → Change Password).
+**Change these passwords immediately after first login** (Profile → Update Profile).
 
 ---
 
@@ -80,7 +80,7 @@ database credentials:
 2. Replace the three `CHANGE_ME_...` placeholders with the database name, username, and
    password your host (cPanel → MySQL Databases, or your VPS) gives you.
 3. Upload the whole project folder to your host (`public_html/` or a subfolder), import
-   `database/database.sql` via phpMyAdmin on that host, and enable SSL on your domain.
+   `database/smart database.sql` via phpMyAdmin on that host, and enable SSL on your domain.
 4. Visit `https://yourdomain.com/...` — the app will automatically detect it's no longer
    on `localhost`/a private LAN IP and switch to the production database credentials and
    HTTPS-secure session cookies. Your local XAMPP setup keeps working unchanged.
@@ -171,7 +171,7 @@ automatically after every granted entry. It is provider-agnostic:
 - `sms_logs` — every SMS attempt with delivery status
 - `settings` — key/value system configuration (school info, feature toggles, SMS provider)
 
-See `database/database.sql` for full column definitions and seed data.
+See `database/smart database.sql` for full column definitions and seed data.
 
 ---
 
@@ -183,3 +183,9 @@ See `database/database.sql` for full column definitions and seed data.
 - All AJAX endpoints return uniform `{ success, message, data }` (or `{ status, reason }`
   for the scanner APIs) JSON, making it straightforward to swap in a native mobile
   client later if desired.
+
+
+## Merged Final Candidate — Phase 8 + V17 Kiosk
+This build uses **V16 Phase 8 Student Photo** as the base and selectively incorporates the stronger **V17 kiosk station** architecture. Student profile photos remain separate from facial-recognition descriptors, while kiosk authorization, status tracking, idle expiration, and Administrator-controlled locking are strengthened. Phase 8 reporting and stable-face auto-capture are intentionally retained.
+
+For an existing Phase 8 database, review and run `database/migration_v17_kiosk_sessions_upgrade.sql` after creating a backup.

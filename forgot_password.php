@@ -47,8 +47,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'identif
                 $message = "Smart Gateway: Your password reset code is {$code}. It expires in 10 minutes. Do not share this code.";
                 $result = sg_send_sms($pdo, $user['contact_number'], $message, 'System');
 
-                $stmt2 = $pdo->prepare("INSERT INTO sms_logs (recipient, message, status, provider_response, sent_by) VALUES (?,?,?,?,?)");
-                $stmt2->execute([$user['contact_number'], $message, $result['status'], $result['response'], 'System']);
+                // PHASE 4.5: shared with sg_notify_entry() so an OTP that comes
+                // back Queued (e.g. IPROG unreachable) gets the same
+                // retry_count/next_retry_at backoff scheduling as an Entry/Exit
+                // SMS, instead of a bare INSERT that skipped retry bookkeeping.
+                sg_log_sms_attempt($pdo, null, $user['contact_number'], $message, 'System', $result, "Password reset OTP for {$user['username']}");
 
                 $_SESSION['fp_user_id']  = (int) $user['id'];
                 $_SESSION['fp_username'] = $user['username'];
@@ -99,12 +102,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'verify_
 // ---- Resend OTP (from step 2) ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'resend_otp') {
     if (!empty($_SESSION['fp_user_id']) && verify_csrf_token($_POST['csrf_token'] ?? '')) {
-        // Basic cooldown: don't resend if a valid unexpired code was created in the last 45 seconds
-        $stmt = $pdo->prepare("SELECT created_at FROM otp_codes WHERE user_id = ? AND purpose='password_reset' AND used=0 ORDER BY created_at DESC LIMIT 1");
+        // PHASE 4.5: fixed a timezone-mismatch bug here (same class as the
+        // Phase 4 lockout/OTP-expiry fix) -- the old code pulled created_at
+        // into PHP and compared via strtotime()/time(), which silently
+        // disabled this 45-second cooldown whenever the DB server's own
+        // timezone doesn't match PHP's configured Asia/Manila. Since IPROG
+        // bills per SMS, a broken cooldown here means real, avoidable cost
+        // on unlimited-rate resends. Comparing entirely in SQL (both sides
+        // computed by the same clock) avoids the mismatch.
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM otp_codes WHERE user_id = ? AND purpose='password_reset' AND used=0 AND created_at >= (NOW() - INTERVAL 45 SECOND)");
         $stmt->execute([$_SESSION['fp_user_id']]);
-        $lastCreated = $stmt->fetchColumn();
+        $recentOtpExists = (int) $stmt->fetchColumn() > 0;
 
-        if ($lastCreated && (time() - strtotime($lastCreated)) < 45) {
+        if ($recentOtpExists) {
             $error = 'Please wait a moment before requesting another code.';
         } else {
             $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? LIMIT 1");
@@ -114,8 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'resend_
                 $code = create_otp($pdo, (int) $user['id'], 'password_reset', 10);
                 $message = "Smart Gateway: Your password reset code is {$code}. It expires in 10 minutes. Do not share this code.";
                 $result = sg_send_sms($pdo, $user['contact_number'], $message, 'System');
-                $pdo->prepare("INSERT INTO sms_logs (recipient, message, status, provider_response, sent_by) VALUES (?,?,?,?,?)")
-                    ->execute([$user['contact_number'], $message, $result['status'], $result['response'], 'System']);
+                sg_log_sms_attempt($pdo, null, $user['contact_number'], $message, 'System', $result, "Password reset OTP for {$user['username']}");
                 unset($_SESSION['fp_otp_attempts']);
                 $info = 'A new code has been sent.';
             }
@@ -135,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'reset')
     } else {
         $new = (string) ($_POST['new_password'] ?? '');
         $confirm = (string) ($_POST['confirm_password'] ?? '');
-        $policyErrors = validate_password_strength($new);
+        $policyErrors = validate_password_reset_strength($new);
 
         if ($policyErrors) {
             $error = 'Password does not meet requirements: ' . implode(' ', $policyErrors);
@@ -165,9 +174,17 @@ $csrf = generate_csrf_token();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Forgot Password | Smart Gateway</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<meta name="description" content="Reset your Smart Gateway staff or administrator account password for Hercor College.">
+<meta name="robots" content="noindex, nofollow">
+<link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/polish.css">
+<link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="shortcut icon" href="favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+<link rel="manifest" href="site.webmanifest" />
 </head>
 <body>
 
@@ -189,7 +206,7 @@ $csrf = generate_csrf_token();
             <div class="d-flex align-items-center gap-2 mb-4">
                 <?php for ($i = 1; $i <= 3; $i++): ?>
                     <div class="rounded-circle d-flex align-items-center justify-content-center fw-600 <?= $i <= $step ? 'bg-primary text-white' : 'bg-light text-muted' ?>" style="width:28px;height:28px;font-size:0.8rem;"><?= $i ?></div>
-                    <?php if ($i < 3): ?><div class="flex-grow-1" style="height:2px; background: <?= $i < $step ? '#0B5ED7' : '#e9ecef' ?>;"></div><?php endif; ?>
+                    <?php if ($i < 3): ?><div class="flex-grow-1" style="height:2px; background: <?= $i < $step ? '#3B82F6' : '#e9ecef' ?>;"></div><?php endif; ?>
                 <?php endfor; ?>
             </div>
 

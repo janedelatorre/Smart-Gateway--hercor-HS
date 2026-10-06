@@ -1,9 +1,10 @@
 <?php
 require_once __DIR__ . '/../database/config.php';
-require_admin(); // Audit trail contains sensitive security data — Administrators only
+require_login(); // Read-only trail — both Administrator and Staff may view it; only Administrators can reach Users/Settings which is where the sensitive write actions live.
 
 $pageTitle = 'Audit Logs';
 $pageHeading = 'Audit Logs';
+$pageSubheading = 'Review security and system activity records';
 $activePage = 'audit_logs';
 require_once __DIR__ . '/../includes/header.php';
 ?>
@@ -14,7 +15,7 @@ require_once __DIR__ . '/../includes/header.php';
     <main class="sg-main">
         <div class="sg-card">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h5 class="fw-bold mb-0">Audit Logs</h5>
+                
                 <div class="d-flex gap-2">
                     <button class="btn btn-outline-secondary btn-sm" onclick="exportAuditLogs()"><i class="bi bi-file-earmark-excel me-1"></i>Export CSV</button>
                     <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>

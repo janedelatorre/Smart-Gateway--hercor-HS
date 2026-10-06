@@ -20,6 +20,8 @@ $showCaptcha = false;
 
 if (($_GET['notice'] ?? '') === 'session_expired') {
     $notice = 'Your session expired due to inactivity. Please log in again.';
+} elseif (($_GET['notice'] ?? '') === 'kiosk_expired') {
+    $notice = 'This kiosk station is locked or its session expired. An Administrator must authorize it again.';
 }
 // reset_success is now handled by the SweetAlert popup below.
 // Previously:
@@ -52,7 +54,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $username = trim($_POST['username'] ?? '');
         $password = (string) ($_POST['password'] ?? '');
-        $remember = isset($_POST['remember']);
         $captchaInput = $_POST['captcha'] ?? '';
 
         if ($username === '' || $password === '') {
@@ -90,17 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['username']      = $user['username'];
                         $_SESSION['fullname']      = $user['fullname'];
                         $_SESSION['role']          = $user['role'];
+                        $_SESSION['profile_picture'] = $user['profile_picture'] ?? null;
                         $_SESSION['last_activity'] = time();
 
                         $pdo->prepare("UPDATE users SET last_login_at = NOW(), last_login_ip = ? WHERE id = ?")
                             ->execute([get_client_ip(), $user['id']]);
                         log_activity($pdo, 'Login Successful', null, $username);
-
-                        if ($remember) {
-                            $token = bin2hex(random_bytes(32));
-                            $pdo->prepare("UPDATE users SET remember_token = ? WHERE id = ?")->execute([$token, $user['id']]);
-                            setcookie('sg_remember', $token, time() + (86400 * 30), '/', '', IS_HTTPS, true);
-                        }
 
                         header('Location: ' . dashboard_url_for_role($user['role']));
                         exit;
@@ -138,49 +134,56 @@ $csrf = generate_csrf_token();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign In | Smart Gateway</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<meta name="description" content="Secure staff and administrator sign-in for Smart Gateway, Hercor College's campus entry verification system.">
+<meta name="robots" content="noindex, nofollow">
+<link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/polish.css">
+<link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="shortcut icon" href="favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+<link rel="manifest" href="site.webmanifest" />
 </head>
 <body>
 
-<div class="login-wrapper">
-    <!-- Left panel: branding -->
-    <div class="login-left d-none d-lg-flex">
-        <div class="logo-crest has-image">
-            <img src="assets/images/logo/school-logo.png" alt="School Logo">
-        </div>
-        <h1>Smart Gateway</h1>
-        <p class="fs-5 mb-4" style="z-index:1;">Campus Entry System</p>
-        <p class="subtitle">Secure &middot; Automated &middot; Efficient</p>
-        <p class="mt-4 opacity-75" style="max-width:380px; z-index:1;">
-            Smart monitoring of student entry for a safer campus — powered by barcode
-            verification with backup facial recognition and instant parent SMS alerts.
-        </p>
-    </div>
-
-    <!-- Right panel: login form -->
-    <div class="login-right">
-        <div class="login-card">
-            <a href="login.php" class="small text-decoration-none text-muted d-inline-flex align-items-center mb-2"><i class="bi bi-arrow-left me-1"></i>Back to portal selection</a>
-            <div class="d-flex align-items-center gap-2 mb-1">
-                <span class="badge <?= $selectedRole === 'Administrator' ? 'bg-primary' : 'bg-success' ?>"><?= e($selectedRole) ?> Portal</span>
+<div class="login-wrapper role-homepage">
+    <section class="login-left">
+        <div class="hero-orbit" aria-hidden="true"></div>
+        <div class="hero-content">
+            <div class="brand-row">
+                <div class="logo-crest has-image"><img src="assets/images/logo/school-logo.png" alt="Hercor College Logo"></div>
+                <div class="brand-copy">
+                    <strong>Hercor College</strong>
+                    <span>HIGH SCHOOL DEPARTMENT</span>
+                </div>
             </div>
-            <h3 class="fw-bold mb-1">Sign in to your account</h3>
-            <p class="text-muted mb-4">Enter your credentials to access the dashboard</p>
+            <div class="eyebrow-line"></div>
+            <h1 class="hero-title">Smart Gateway<span>Campus Entry System</span></h1>
+            <p class="hero-copy">Secure, automated, and efficient campus entry for students, faculty and staff — powered by barcode verification and real-time monitoring.</p>
+            <div class="login-features">
+                <div class="login-feature"><div class="feature-icon"><i class="bi bi-shield-check"></i></div><strong>Secure</strong><small>Verified access for a safer campus.</small></div>
+                <div class="login-feature"><div class="feature-icon"><i class="bi bi-gear-fill"></i></div><strong>Automated</strong><small>Faster and easier entry process.</small></div>
+                <div class="login-feature"><div class="feature-icon"><i class="bi bi-link-45deg"></i></div><strong>Connected</strong><small>A unified system for everyone.</small></div>
+            </div>
+        </div>
+    </section>
 
-           <?php if ($error): ?>
-<div class="alert alert-danger py-2">
-    <i class="bi bi-exclamation-triangle-fill me-1"></i><?= e($error) ?>
-</div>
-<?php endif; ?>
+    <div class="login-right role-home-right">
+        <div class="login-card">
+            <a href="login.php" class="small text-decoration-none d-inline-flex align-items-center mb-3"><i class="bi bi-arrow-left me-1"></i>Back to portal selection</a>
+            <div class="role-pill mb-3"><i class="bi bi-shield-lock-fill"></i><?= e($selectedRole) ?> Portal</div>
+            <h3 class="fw-bold mb-1">Welcome back!</h3>
+            <p class="mb-4">Sign in to your <?= e(strtolower($selectedRole)) ?> portal.</p>
 
-<?php if (($_GET['notice'] ?? '') === 'session_expired'): ?>
-<div class="alert alert-warning py-2">
-    <i class="bi bi-clock-history me-1"></i>
-    <?= e($notice) ?>
-</div>
-<?php endif; ?>
+            <?php if ($error): ?>
+            <div class="alert alert-danger py-2"><i class="bi bi-exclamation-triangle-fill me-1"></i><?= e($error) ?></div>
+            <?php endif; ?>
+
+            <?php if (in_array($_GET['notice'] ?? '', ['session_expired', 'kiosk_expired'], true)): ?>
+            <div class="alert alert-warning py-2"><i class="bi bi-clock-history me-1"></i><?= e($notice) ?></div>
+            <?php endif; ?>
 
             <form method="POST" autocomplete="off" id="loginForm">
                 <input type="hidden" name="csrf_token" value="<?= e($csrf) ?>">
@@ -188,14 +191,14 @@ $csrf = generate_csrf_token();
 
                 <div class="mb-3">
                     <label class="form-label fw-600">Username</label>
-                    <input type="text" name="username" autocomplete="username" class="form-control" placeholder="Enter username" value="<?= e($usernameForCaptchaCheck) ?>" required autofocus>
+                    <input type="text" name="username" autocomplete="username" class="form-control" placeholder="Enter your username" value="<?= e($usernameForCaptchaCheck) ?>" required autofocus>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label fw-600">Password</label>
                     <div class="input-group">
-                        <input type="password" autocomplete="current-password" name="password" id="passwordField" class="form-control" placeholder="Enter password" required>
-                        <button class="btn btn-outline-secondary" type="button" id="togglePassword"><i class="bi bi-eye"></i></button>
+                        <input type="password" autocomplete="current-password" name="password" id="passwordField" class="form-control" placeholder="Enter your password" required>
+                        <button class="btn" type="button" id="togglePassword"><i class="bi bi-eye"></i></button>
                     </div>
                 </div>
 
@@ -207,31 +210,26 @@ $csrf = generate_csrf_token();
                 </div>
                 <?php endif; ?>
 
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="remember" id="remember">
-                        <label class="form-check-label" for="remember">Remember me</label>
-                    </div>
+                <div class="d-flex justify-content-end align-items-center mb-4">
                     <a href="forgot_password.php" class="small text-decoration-none">Forgot password?</a>
                 </div>
 
                 <button type="submit" class="btn btn-sg-primary w-100" id="loginSubmitBtn">
-                    <span id="loginBtnText">Sign in</span>
+                    <span id="loginBtnText">Sign in <i class="bi bi-arrow-right ms-1"></i></span>
                     <span id="loginBtnSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
                 </button>
-
-                <p class="text-center text-muted small mt-4 mb-0">&copy; <?= date('Y') ?> Smart Gateway System</p>
+                <div class="auth-divider"></div>
+                <p class="text-center small mb-0">&copy; <?= date('Y') ?> Smart Gateway System</p>
             </form>
         </div>
     </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="assets/vendor/sweetalert2/sweetalert2.all.min.js"></script>
 
 <?php if (($_GET['notice'] ?? '') === 'reset_success'): ?>
 <script>
-Swal.fire({ icon: 'success', title: 'Password Reset Successful',text: 'Your password has been updated successfully.', confirmButtonText: 'Sign In',confirmButtonColor: '#0B5ED7'
+Swal.fire({ icon: 'success', title: 'Password Reset Successful',text: 'Your password has been updated successfully.', confirmButtonText: 'Sign In',confirmButtonColor: '#3B82F6'
 }).then(() => {
     document.querySelector('input[name="username"]').focus();
 });

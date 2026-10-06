@@ -17,6 +17,8 @@ function loadLogs(page = 1) {
         date_to: document.getElementById('filterDateTo').value,
         status: document.getElementById('filterStatusLog').value,
         method: document.getElementById('filterMethodLog').value,
+        transaction_type: document.getElementById('filterTypeLog').value,
+        grade: document.getElementById('filterGradeLog').value,
     });
 
     sgGet(`${API_LOGS}?${params.toString()}`).then(res => {
@@ -32,7 +34,7 @@ function loadLogs(page = 1) {
 function renderLogsTable(logs) {
     const tbody = document.getElementById('logsTableBody');
     if (!logs.length) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No entry logs found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No entry logs found.</td></tr>`;
         return;
     }
     tbody.innerHTML = logs.map(l => {
@@ -40,12 +42,13 @@ function renderLogsTable(logs) {
         return `<tr>
             <td>${dt.toLocaleDateString()}</td>
             <td>${dt.toLocaleTimeString()}</td>
-            <td>${l.student_id ?? '-'}</td>
-            <td>${l.fullname ?? 'Unknown'}</td>
-            <td>${l.grade ?? '-'}</td>
+            <td>${sgEscapeHtml(l.student_id ?? '-')}</td>
+            <td>${sgEscapeHtml(l.fullname ?? 'Unknown')}</td>
+            <td>${sgEscapeHtml(l.grade ?? '-')}</td>
             <td>${l.verification_method}</td>
+            <td>${l.transaction_type ?? '-'}</td>
             <td>${l.status === 'Match' ? '<span class="badge-match">Match</span>' : `<span class="badge-denied">Denied</span>`}</td>
-            <td>${l.verified_by ?? '-'}</td>
+            <td>${sgEscapeHtml(l.verified_by ?? '-')}</td>
         </tr>`;
     }).join('');
 }
@@ -60,7 +63,7 @@ function renderLogsPagination(total, page, perPage) {
     ul.innerHTML = html;
 }
 
-['searchLogs', 'filterDateFrom', 'filterDateTo', 'filterStatusLog', 'filterMethodLog'].forEach(id => {
+['searchLogs', 'filterDateFrom', 'filterDateTo', 'filterStatusLog', 'filterMethodLog', 'filterTypeLog', 'filterGradeLog'].forEach(id => {
     document.getElementById(id).addEventListener('input', debounceLogs(() => loadLogs(1), 350));
     document.getElementById(id).addEventListener('change', () => loadLogs(1));
 });
@@ -70,10 +73,10 @@ function debounceLogs(fn, delay) { let t; return (...a) => { clearTimeout(t); t 
 function exportLogs(type) {
     if (!lastLogsData.length) { sgToast('info', 'No data to export.'); return; }
     if (type === 'excel') {
-        let csv = 'Date,Time In,Student ID,Name,Grade,Method,Status,Verified By\n';
+        let csv = 'Date,Time In,Student ID,Name,Grade,Method,Type,Status,Verified By\n';
         lastLogsData.forEach(l => {
             const dt = new Date(l.time_in.replace(' ', 'T'));
-            csv += `${dt.toLocaleDateString()},${dt.toLocaleTimeString()},${l.student_id ?? ''},${l.fullname ?? ''},${l.grade ?? ''},${l.verification_method},${l.status},${l.verified_by ?? ''}\n`;
+            csv += `${dt.toLocaleDateString()},${dt.toLocaleTimeString()},${l.student_id ?? ''},${l.fullname ?? ''},${l.grade ?? ''},${l.verification_method},${l.transaction_type ?? ''},${l.status},${l.verified_by ?? ''}\n`;
         });
         const blob = new Blob([csv], { type: 'text/csv' });
         const link = document.createElement('a');

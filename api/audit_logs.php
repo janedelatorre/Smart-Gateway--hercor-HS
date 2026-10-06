@@ -1,22 +1,26 @@
 <?php
 /**
  * =====================================================================
- * AUDIT LOGS API — Administrator only, read-only
+ * AUDIT LOGS API — read-only for any authenticated user (Administrator or Staff)
  * =====================================================================
  * Serves the audit_logs table (written to via includes/security.php's
  * log_activity() helper across the whole app) to the Audit Logs page.
+ * Staff have read access to their own accountability trail (logins,
+ * scanner activity, etc.) the same way they already see a snapshot of
+ * it on their dashboard — this endpoint is read-only, so it introduces
+ * no new write/privilege surface for Staff.
  * Actions: list
  * =====================================================================
  */
 require_once __DIR__ . '/../database/config.php';
 header('Content-Type: application/json');
 
-if (empty($_SESSION['user_id'])) {
+if (!require_login_api()) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized.']);
     exit;
 }
-if (($_SESSION['role'] ?? '') !== 'Administrator') {
-    echo json_encode(['success' => false, 'message' => 'Access denied. Administrator role required.']);
+if (!in_array($_SESSION['role'] ?? '', ['Administrator', 'Staff'], true)) {
+    echo json_encode(['success' => false, 'message' => 'Access denied.']);
     exit;
 }
 

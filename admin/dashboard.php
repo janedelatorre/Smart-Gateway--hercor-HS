@@ -1,322 +1,276 @@
 <?php
 require_once __DIR__ . '/../database/config.php';
-require_admin(); // Administrator-only dashboard — Staff are routed to staff_dashboard.php
+require_admin();
 
-// ---- Stat card queries ----
-$totalStudents = $pdo->query("SELECT COUNT(*) FROM students WHERE status = 'Active'")->fetchColumn();
-
+// ---- Dashboard data ----
+$totalStudents = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE status = 'Active'")->fetchColumn();
 $today = date('Y-m-d');
-$todayEntries = $pdo->prepare("SELECT COUNT(*) FROM entry_logs WHERE DATE(time_in) = ? AND status = 'Match'");
-$todayEntries->execute([$today]);
-$todayEntries = $todayEntries->fetchColumn();
 
-$deniedEntries = $pdo->prepare("SELECT COUNT(*) FROM entry_logs WHERE DATE(time_in) = ? AND status = 'Denied'");
-$deniedEntries->execute([$today]);
-$deniedEntries = $deniedEntries->fetchColumn();
+// Range comparison (not DATE(time_in) = ?) so the idx_entry_logs_time_in index can be used.
+$todayStart = $today . ' 00:00:00';
+$todayEnd   = $today . ' 23:59:59';
 
-$smsToday = $pdo->prepare("SELECT COUNT(*) FROM sms_logs WHERE DATE(sent_at) = ?");
-$smsToday->execute([$today]);
-$smsToday = $smsToday->fetchColumn();
+// "Today's Entries" / "Students Entered Today" are explicitly Entry-only
+// metrics (see their sub-labels below) — filtered by transaction_type so an
+// Exit scan is never counted as an "entry". "Granted vs Denied" (the pie
+// chart) intentionally stays unfiltered: it represents ALL successful
+// verifications today (Entry + Exit) against denials, so it keeps its own
+// $todayAllGranted total rather than reusing $todayEntries.
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM entry_logs WHERE time_in BETWEEN ? AND ? AND status = 'Match' AND transaction_type = 'Entry'");
+$stmt->execute([$todayStart, $todayEnd]);
+$todayEntries = (int)$stmt->fetchColumn();
 
-// ---- Weekly entries overview (last 7 days) ----
-$weekly = $pdo->query("
-    SELECT DATE(time_in) as d, COUNT(*) as total
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM entry_logs WHERE time_in BETWEEN ? AND ? AND status = 'Match'");
+$stmt->execute([$todayStart, $todayEnd]);
+$todayAllGranted = (int)$stmt->fetchColumn();
+
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM entry_logs WHERE time_in BETWEEN ? AND ? AND status = 'Denied'");
+$stmt->execute([$todayStart, $todayEnd]);
+$deniedEntries = (int)$stmt->fetchColumn();
+
+$stmt = $pdo->prepare("SELECT COUNT(DISTINCT student_id) FROM entry_logs WHERE time_in BETWEEN ? AND ? AND status = 'Match' AND transaction_type = 'Entry' AND student_id IS NOT NULL");
+$stmt->execute([$todayStart, $todayEnd]);
+$uniqueStudentsToday = (int)$stmt->fetchColumn();
+
+// Build a complete 7-day dataset so the chart can drive the dashboard KPIs.
+$weeklyRows = $pdo->query("
+    SELECT DATE(time_in) AS d,
+           SUM(status = 'Match' AND transaction_type = 'Entry') AS granted,
+           SUM(status = 'Match') AS all_granted,
+           SUM(status = 'Denied') AS denied,
+           COUNT(DISTINCT CASE WHEN status = 'Match' AND transaction_type = 'Entry' AND student_id IS NOT NULL THEN student_id END) AS unique_students
     FROM entry_logs
-    WHERE status = 'Match' AND time_in >= (CURDATE() - INTERVAL 6 DAY)
+    WHERE time_in >= (CURDATE() - INTERVAL 6 DAY)
     GROUP BY DATE(time_in)
     ORDER BY d ASC
 ")->fetchAll();
+$smsWeeklyRows = $pdo->query("
+    SELECT DATE(sent_at) AS d,
+           SUM(status = 'Match') AS sent,
+           SUM(status = 'Pending') AS pending,
+           SUM(status = 'Denied') AS failed
+    FROM sms_logs
+    WHERE sent_at >= (CURDATE() - INTERVAL 6 DAY)
+    GROUP BY DATE(sent_at)
+    ORDER BY d ASC
+")->fetchAll();
+
+$weeklyStats = [];
 $weeklyLabels = [];
 $weeklyData = [];
 for ($i = 6; $i >= 0; $i--) {
     $d = date('Y-m-d', strtotime("-$i day"));
-    $weeklyLabels[] = date('D', strtotime($d));
-    $match = array_filter($weekly, fn($r) => $r['d'] === $d);
-    $weeklyData[] = $match ? (int) array_values($match)[0]['total'] : 0;
+    $row = null;
+    foreach ($weeklyRows as $candidate) {
+        if ($candidate['d'] === $d) { $row = $candidate; break; }
+    }
+    $smsRow = null;
+    foreach ($smsWeeklyRows as $candidate) {
+        if ($candidate['d'] === $d) { $smsRow = $candidate; break; }
+    }
+    $stats = [
+        'date' => $d,
+        'label' => date('D', strtotime($d)),
+        'display' => date('M j, Y', strtotime($d)),
+        'granted' => (int)($row['granted'] ?? 0),
+        'allGranted' => (int)($row['all_granted'] ?? 0),
+        'denied' => (int)($row['denied'] ?? 0),
+        'unique' => (int)($row['unique_students'] ?? 0),
+        'smsSent' => (int)($smsRow['sent'] ?? 0),
+        'smsPending' => (int)($smsRow['pending'] ?? 0),
+        'smsFailed' => (int)($smsRow['failed'] ?? 0),
+    ];
+    $weeklyStats[] = $stats;
+    $weeklyLabels[] = $stats['label'];
+    $weeklyData[] = $stats['granted'];
 }
 
-// ---- Granted vs Denied (today) pie ----
-$pieData = [(int)$todayEntries, (int)$deniedEntries];
+$recentLogs = $pdo->query("\n    SELECT el.*, s.photo AS student_photo\n    FROM entry_logs el\n    LEFT JOIN students s ON s.student_id = el.student_id\n    ORDER BY el.time_in DESC\n    LIMIT 5\n")->fetchAll();
 
-// ---- Recent entry logs ----
-$recentLogs = $pdo->query("SELECT * FROM entry_logs ORDER BY time_in DESC LIMIT 6")->fetchAll();
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM sms_logs WHERE sent_at BETWEEN ? AND ? AND status = 'Match'");
+$stmt->execute([$todayStart, $todayEnd]);
+$smsSent = (int)$stmt->fetchColumn();
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM sms_logs WHERE sent_at BETWEEN ? AND ? AND status = 'Denied'");
+$stmt->execute([$todayStart, $todayEnd]);
+$smsFailed = (int)$stmt->fetchColumn();
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM sms_logs WHERE sent_at BETWEEN ? AND ? AND status = 'Pending'");
+$stmt->execute([$todayStart, $todayEnd]);
+$smsPending = (int)$stmt->fetchColumn();
 
-// ---- SMS stats today ----
-$smsSent = $pdo->prepare("SELECT COUNT(*) FROM sms_logs WHERE DATE(sent_at) = ? AND status = 'Match'");
-$smsSent->execute([$today]);
-$smsSent = $smsSent->fetchColumn();
-$smsFailed = $pdo->prepare("SELECT COUNT(*) FROM sms_logs WHERE DATE(sent_at) = ? AND status = 'Denied'");
-$smsFailed->execute([$today]);
-$smsFailed = $smsFailed->fetchColumn();
-$smsPending = $pdo->prepare("SELECT COUNT(*) FROM sms_logs WHERE DATE(sent_at) = ? AND status = 'Pending'");
-$smsPending->execute([$today]);
-$smsPending = $smsPending->fetchColumn();
-
-// ---- Recent system activity (live audit trail) ----
 $recentActivity = get_recent_audit_logs($pdo, 5);
 
 $pageTitle = 'Dashboard';
-$pageHeading = 'Dashboard';
+$pageHeading = 'SYSTEM ADMINISTRATOR DASHBOARD';
+$pageSubheading = 'Hercor College High School Department';
 $activePage = 'dashboard';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <?php require_once __DIR__ . '/../includes/sidebar.php'; ?>
-<div class="sg-content">
+
+<div class="sg-content sg-dashboard-content">
     <?php require_once __DIR__ . '/../includes/navbar.php'; ?>
 
-    <main class="sg-main">
+    <main class="sg-main sg-dashboard-main">
+        <div class="sg-welcome">Welcome Back!</div>
 
-        <!-- Stat Cards -->
-        <div class="row g-3 mb-3">
-            <div class="col-6 col-lg-3">
-                <div class="sg-card stat-card">
-                    <div class="icon-box bg-icon-blue"><i class="bi bi-people-fill"></i></div>
-                    <div>
-                        <div class="stat-value"><?= (int)$totalStudents ?></div>
-                        <div class="stat-label">Total Students</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="sg-card stat-card">
-                    <div class="icon-box bg-icon-green"><i class="bi bi-box-arrow-in-right"></i></div>
-                    <div>
-                        <div class="stat-value"><?= (int)$todayEntries ?></div>
-                        <div class="stat-label">Today's Entries</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="sg-card stat-card">
-                    <div class="icon-box bg-icon-red"><i class="bi bi-x-circle-fill"></i></div>
-                    <div>
-                        <div class="stat-value"><?= (int)$deniedEntries ?></div>
-                        <div class="stat-label">Denied Entries</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="sg-card stat-card">
-                    <div class="icon-box bg-icon-purple"><i class="bi bi-chat-dots-fill"></i></div>
-                    <div>
-                        <div class="stat-value"><?= (int)$smsToday ?></div>
-                        <div class="stat-label">SMS Sent Today</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Top statistics -->
+        <section class="sg-dashboard-grid sg-stat-grid">
+            <article class="sg-dashboard-card sg-stat-card stat-blue">
+                <div class="sg-stat-icon"><i class="bi bi-people-fill"></i></div>
+                <div class="sg-stat-copy"><div class="sg-stat-label">Total Students</div><div class="sg-stat-value"><?= number_format($totalStudents) ?></div><div class="sg-stat-sub">Total Registered Students</div></div>
+            </article>
+            <article class="sg-dashboard-card sg-stat-card stat-green">
+                <div class="sg-stat-icon"><i class="bi bi-person-plus-fill"></i></div>
+                <div class="sg-stat-copy"><div class="sg-stat-label" id="kpiUniqueLabel">Students Entered Today</div><div class="sg-stat-value" id="kpiUniqueValue"><?= number_format($uniqueStudentsToday) ?><span class="sg-stat-denom"> / <?= number_format($totalStudents) ?></span></div><div class="sg-stat-sub">Unique Students</div></div>
+            </article>
+            <article class="sg-dashboard-card sg-stat-card stat-purple">
+                <div class="sg-stat-icon"><i class="bi bi-people-fill"></i></div>
+                <div class="sg-stat-copy"><div class="sg-stat-label" id="kpiGrantedLabel">Today's Entries</div><div class="sg-stat-value" id="kpiGrantedValue"><?= number_format($todayEntries) ?></div><div class="sg-stat-sub">Successful Entry Scans</div></div>
+            </article>
+            <article class="sg-dashboard-card sg-stat-card stat-red">
+                <div class="sg-stat-icon"><i class="bi bi-slash-circle"></i></div>
+                <div class="sg-stat-copy"><div class="sg-stat-label" id="kpiDeniedLabel">Today's Denied</div><div class="sg-stat-value" id="kpiDeniedValue"><?= number_format($deniedEntries) ?></div><div class="sg-stat-sub">Access Denied Attempts</div></div>
+            </article>
+        </section>
 
         <!-- Charts -->
-        <div class="row g-3 mb-3">
-            <div class="col-lg-8">
-                <div class="sg-card h-100">
-                    <h6 class="fw-bold mb-3">Entries Overview (This Week)</h6>
-                   <div style="height:320px">
-    <canvas id="weeklyChart"></canvas>
-</div>
+        <section class="sg-dashboard-grid sg-chart-grid">
+            <article class="sg-dashboard-card sg-weekly-card">
+                <div class="sg-card-heading">
+                    <h2><i class="bi bi-bar-chart-fill"></i> Entry Overview This Week <span class="sg-chart-selection" id="chartSelectionLabel">Today</span></h2>
                 </div>
-            </div>
-            <div class="col-lg-4">
-                <div class="sg-card h-100">
-                    <h6 class="fw-bold mb-3">Granted vs Denied (Today)</h6>
-                   <div style="height:260px;">
-    <canvas id="pieChart"></canvas>
-</div>
-                </div>
-            </div>
-        </div>
+                <div class="sg-weekly-chart-wrap"><canvas id="weeklyChart"></canvas></div>
+            </article>
+            <article class="sg-dashboard-card sg-pie-card">
+                <div class="sg-card-heading"><h2><i class="bi bi-star-fill"></i> Granted vs Denied <span id="pieSelectionLabel">Today</span></h2></div>
+                <div class="sg-pie-wrap"><canvas id="pieChart"></canvas><div class="sg-pie-center"><strong id="pieTotal"><?= number_format($todayAllGranted + $deniedEntries) ?></strong><span>Total Scans</span></div></div>
+                <div class="sg-pie-legend"><span><i class="dot granted"></i> Granted — <strong id="pieGranted"><?= number_format($todayAllGranted) ?></strong></span><span><i class="dot denied"></i> Denied — <strong id="pieDenied"><?= number_format($deniedEntries) ?></strong></span></div>
+            </article>
+        </section>
 
-        <!-- Recent logs + SMS + Activity -->
-        <div class="row g-3">
-            <div class="col-lg-7">
-                <div class="sg-card h-100">
-                    <h6 class="fw-bold mb-3">Recent Entry Logs</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sg mb-0">
-                            <thead><tr><th>Name</th><th>Grade</th><th>Time In</th><th>Status</th></tr></thead>
-                            <tbody>
-                            <?php if (!$recentLogs): ?>
-                                <tr><td colspan="4" class="text-center text-muted py-3">No entry logs yet.</td></tr>
-                            <?php endif; ?>
-                            <?php foreach ($recentLogs as $log): ?>
-                                <tr>
-                                    <td><?= e($log['fullname'] ?? 'Unknown') ?></td>
-                                    <td><?= e($log['grade'] ?? '-') ?></td>
-                                    <td><?= date('h:i A', strtotime($log['time_in'])) ?></td>
-                                    <td>
-                                        <?php if ($log['status'] === 'Match'): ?>
-                                            <span class="badge-match">Match</span>
-                                        <?php else: ?>
-                                            <span class="badge-denied">Denied</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
+        <!-- Bottom dashboard panels -->
+        <section class="sg-dashboard-grid sg-bottom-grid">
+            <article class="sg-dashboard-card sg-logs-card">
+                <div class="sg-card-heading"><h2><i class="bi bi-clock"></i> Recent Entry Logs</h2><a href="<?= APP_URL ?>/admin/entry_logs.php">View All <i class="bi bi-arrow-right"></i></a></div>
+                <div class="table-responsive">
+                    <table class="sg-dashboard-table">
+                        <thead><tr><th>#</th><th>STUDENT NAME</th><th>GRADE LEVEL</th><th>TIME IN</th><th>STATUS</th></tr></thead>
+                        <tbody>
+                        <?php if (!$recentLogs): ?><tr><td colspan="5" class="text-center text-muted py-4">No entry logs yet.</td></tr><?php endif; ?>
+                        <?php foreach ($recentLogs as $i => $log):
+                            $photo = trim((string)($log['student_photo'] ?? ''));
+                            $photoUrl = $photo !== '' ? APP_URL . '/uploads/student/' . rawurlencode(basename($photo)) : '';
+                            $isMatch = ($log['status'] ?? '') === 'Match';
+                        ?>
+                            <tr>
+                                <td><?= $i + 1 ?></td>
+                                <td><div class="sg-student-cell"><?php if ($photoUrl): ?><img src="<?= e($photoUrl) ?>" alt=""><?php else: ?><span class="sg-student-avatar"><i class="bi bi-person-fill"></i></span><?php endif; ?><span><?= e($log['fullname'] ?? 'Unknown Person') ?><small><?= e($log['student_id'] ?? '') ?></small></span></div></td>
+                                <td><?= e($log['grade'] ?? '-') ?></td>
+                                <td><?= e(date('h:i A', strtotime($log['time_in']))) ?></td>
+                                <td><span class="sg-status <?= $isMatch ? 'granted' : 'denied' ?>"><i class="bi <?= $isMatch ? 'bi-check-circle-fill' : 'bi-dash-circle-fill' ?>"></i> <?= $isMatch ? 'Granted' : 'Denied' ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
                 </div>
-            </div>
-            <div class="col-lg-5">
-                <div class="sg-card mb-3">
-                    <h6 class="fw-bold mb-3">SMS Notifications (Today)</h6>
-                    <div class="d-flex align-items-center gap-4">
-                      <div style="width:170px;height:170px;">
-    <canvas id="smsDonut"></canvas>
-</div>
-                        <ul class="list-unstyled mb-0 small">
-                            <li class="mb-2"><span class="badge-match me-2">&nbsp;</span>Sent: <strong><?= (int)$smsSent ?></strong></li>
-                            <li class="mb-2"><span class="badge-denied me-2">&nbsp;</span>Failed: <strong><?= (int)$smsFailed ?></strong></li>
-                            <li><span class="badge-pending me-2">&nbsp;</span>Pending: <strong><?= (int)$smsPending ?></strong></li>
-                        </ul>
+            </article>
+
+            <div class="sg-right-stack">
+                <article class="sg-dashboard-card sg-sms-card">
+                    <div class="sg-card-heading"><h2><i class="bi bi-send-fill"></i> SMS Notifications <span id="smsSelectionLabel">Today</span></h2></div>
+                    <div class="sg-sms-body">
+                        <div class="sg-sms-donut"><canvas id="smsDonut"></canvas><div class="sg-sms-center"><strong id="smsCenterValue"><?= number_format($smsSent) ?></strong><span>Sent</span></div></div>
+                        <div class="sg-sms-legend"><div><i class="dot sent"></i><span>Sent</span><strong id="smsSentValue"><?= number_format($smsSent) ?></strong></div><div><i class="dot pending"></i><span>Pending</span><strong id="smsPendingValue"><?= number_format($smsPending) ?></strong></div><div><i class="dot failed"></i><span>Failed</span><strong id="smsFailedValue"><?= number_format($smsFailed) ?></strong></div></div>
                     </div>
-                </div>
-                <div class="sg-card">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold mb-0">System Activity</h6>
-                        <a href="<?= APP_URL ?>/admin/audit_logs.php" class="small text-decoration-none">View all</a>
-                    </div>
-                    <ul class="list-unstyled small mb-0">
-                        <?php if (!$recentActivity): ?>
-                            <li class="text-muted">No recent activity yet.</li>
-                        <?php endif; ?>
-                        <?php foreach ($recentActivity as $i => $act): ?>
-                            <li class="<?= $i < count($recentActivity) - 1 ? 'mb-2 ' : '' ?>d-flex justify-content-between">
-                                <span><i class="bi bi-dot text-sg-accent"></i><?= e($act['username'] ?? 'System') ?> — <?= e($act['action']) ?></span>
-                                <span class="text-muted" title="<?= e(date('M j, Y h:i A', strtotime($act['created_at']))) ?>"><?= e(date('h:i A', strtotime($act['created_at']))) ?></span>
-                            </li>
+                </article>
+
+                <article class="sg-dashboard-card sg-activity-card">
+                    <div class="sg-card-heading"><h2><i class="bi bi-people-fill"></i> System Activity</h2><a href="<?= APP_URL ?>/admin/audit_logs.php">View All <i class="bi bi-arrow-right"></i></a></div>
+                    <ul class="sg-activity-list">
+                        <?php if (!$recentActivity): ?><li class="text-muted">No recent activity yet.</li><?php endif; ?>
+                        <?php foreach ($recentActivity as $act): ?>
+                            <li><span class="sg-activity-main"><i class="bi bi-person-fill"></i><span><strong><?= e($act['username'] ?? 'System') ?></strong> - <?= e($act['action']) ?></span></span><time><?= e(date('h:i A', strtotime($act['created_at']))) ?></time></li>
                         <?php endforeach; ?>
                     </ul>
-                </div>
+                </article>
             </div>
-        </div>
+        </section>
     </main>
 </div>
- <?php require_once __DIR__ . '/../includes/footer.php'; ?>
+
+<?php require_once __DIR__ . '/../includes/footer.php'; ?>
 
 <script>
-   
-// Weekly Entries Line/Bar Chart
-new Chart(document.getElementById('weeklyChart'), {
-    type: 'line',
-    data: {
-        labels: <?= json_encode($weeklyLabels) ?>,
-    datasets: [{
-    label: 'Entries',
-    data: <?= json_encode($weeklyData) ?>,
+(() => {
+    const weeklyStats = <?= json_encode($weeklyStats) ?>;
+    const labels = weeklyStats.map(x => x.label);
+    const weekly = weeklyStats.map(x => x.granted);
+    const totalStudents = <?= (int)$totalStudents ?>;
+    const initialDate = <?= json_encode($today) ?>;
+    const initialGranted = <?= (int)$todayAllGranted ?>;
+    const initialDenied = <?= (int)$deniedEntries ?>;
 
-    borderColor: '#2563EB',
-    backgroundColor: 'rgba(37,99,235,.12)',
-
-    borderWidth: 3,
-    tension: .4,
-    fill: true,
-
-    
-
-    pointRadius: 5,
-    pointHoverRadius: 7,
-
-    pointHoverBackgroundColor: '#fff',
-pointHoverBorderColor: '#2563EB',
-pointHoverBorderWidth: 3,
-
-    pointBackgroundColor: '#2563EB',
-    pointBorderColor: '#fff',
-    pointBorderWidth: 2
-
-
-}]
-    },
-    options: {
-    responsive: true,
-    maintainAspectRatio: false,
-
-animation: {
-    duration: 1200,
-    easing: 'easeOutQuart'
-},
-
-    interaction: {
-        intersect: false,
-        mode: 'index'
-    },
-
-    plugins: {
-        legend: {
-            display: false
-        },
-        tooltip: {
-            backgroundColor: '#1f2937',
-            titleColor: '#fff',
-            bodyColor: '#fff',
-            padding: 10
+    function applyDayStats(index) {
+        const day = weeklyStats[index];
+        if (!day) return;
+        const suffix = day.date === initialDate ? 'Today' : day.display;
+        document.getElementById('kpiUniqueLabel').textContent = `Students Entered — ${suffix}`;
+        document.getElementById('kpiUniqueValue').innerHTML = `${day.unique}<span class="sg-stat-denom"> / ${totalStudents}</span>`;
+        document.getElementById('kpiGrantedLabel').textContent = `Entries — ${suffix}`;
+        document.getElementById('kpiGrantedValue').textContent = day.granted;
+        document.getElementById('kpiDeniedLabel').textContent = `Denied — ${suffix}`;
+        document.getElementById('kpiDeniedValue').textContent = day.denied;
+        document.getElementById('chartSelectionLabel').textContent = suffix;
+        document.getElementById('pieSelectionLabel').textContent = suffix;
+        document.getElementById('pieTotal').textContent = day.allGranted + day.denied;
+        document.getElementById('pieGranted').textContent = day.allGranted;
+        document.getElementById('pieDenied').textContent = day.denied;
+        document.getElementById('smsCenterValue').textContent = day.smsSent;
+        document.getElementById('smsSentValue').textContent = day.smsSent;
+        document.getElementById('smsPendingValue').textContent = day.smsPending;
+        document.getElementById('smsFailedValue').textContent = day.smsFailed;
+        document.getElementById('smsSelectionLabel').textContent = suffix;
+        if (smsChart) {
+            smsChart.data.datasets[0].data = [day.smsSent, day.smsPending, day.smsFailed];
+            smsChart.update();
         }
-    },
-
-    scales: {
-        x: {
-            grid: {
-                display: false
-            }
-        },
-        y: {
-            beginAtZero: true,
-            ticks: {
-                precision: 0
-            },
-            grid: {
-                color: 'rgba(0,0,0,.06)'
-            }
+        if (pieChart) {
+            pieChart.data.datasets[0].data = [day.allGranted, day.denied];
+            pieChart.update();
         }
+        weeklyChart?.setActiveElements([{datasetIndex:0,index}]);
+        weeklyChart?.tooltip.setActiveElements([{datasetIndex:0,index}], {x:0,y:0});
+        weeklyChart?.update();
     }
-}});
 
-// Granted vs Denied Pie
-new Chart(document.getElementById('pieChart'), {
-    type: 'doughnut',
-    data: {
-        labels: ['Granted', 'Denied'],
-        datasets: [{ data: <?= json_encode($pieData) ?>, backgroundColor: ['#20C997', '#DC3545'] }]
-    },
-   options: {
-    responsive: true,
-    maintainAspectRatio: false,
-
-    cutout: '70%',
-    radius: '95%',
-
-    plugins: {
-        legend: {
-            position: 'bottom',
-            labels: {
-                usePointStyle: true,
-                padding: 20
+    const weeklyCanvas = document.getElementById('weeklyChart');
+    let weeklyChart = null;
+    if (weeklyCanvas) {
+        weeklyChart = new Chart(weeklyCanvas, {
+            type:'line',
+            data:{ labels, datasets:[{ data:weekly, borderColor:'#2E86D1', backgroundColor:'rgba(46,134,209,.15)', borderWidth:2.5, tension:.35, fill:true, pointRadius:5, pointHoverRadius:7, pointBackgroundColor:'#2E86D1', pointBorderColor:'#fff', pointBorderWidth:2 }] },
+            options:{
+                responsive:true, maintainAspectRatio:false,
+                interaction:{intersect:false,mode:'index'},
+                onClick:(event, elements) => {
+                    if (elements.length) applyDayStats(elements[0].index);
+                },
+                onHover:(event, elements) => { event.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
+                plugins:{legend:{display:false},tooltip:{backgroundColor:'#1f2937',titleColor:'#fff',bodyColor:'#fff',padding:10,callbacks:{title:(items)=>weeklyStats[items[0].dataIndex]?.display || ''}}},
+                scales:{x:{grid:{display:false},ticks:{color:'#65738B',font:{size:12,weight:'600'}}},y:{beginAtZero:true,ticks:{precision:0,color:'#65738B'},grid:{color:'rgba(84,105,140,.10)'}}}
             }
-        }
+        });
     }
-}
-});
 
-// SMS Donut
-new Chart(document.getElementById('smsDonut'), {
-    type: 'doughnut',
-    data: {
-        labels: ['Sent', 'Failed', 'Pending'],
-        datasets: [{ data: [<?= (int)$smsSent ?>, <?= (int)$smsFailed ?>, <?= (int)$smsPending ?>], backgroundColor: ['#0B5ED7', '#DC3545', '#FFC107'] }]
-    },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
+    let pieChart = null;
+    const pieCanvas = document.getElementById('pieChart');
+    if (pieCanvas) pieChart = new Chart(pieCanvas,{type:'doughnut',data:{labels:['Granted','Denied'],datasets:[{data:[initialGranted,initialDenied],backgroundColor:['#65A9A3','#D9A7B0'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'73%',plugins:{legend:{display:false}}}});
 
-    cutout: '72%',
-    radius: '95%',
+    let smsChart = null;
+    const smsCanvas = document.getElementById('smsDonut');
+    if (smsCanvas) smsChart = new Chart(smsCanvas,{type:'doughnut',data:{labels:['Sent','Pending','Failed'],datasets:[{data:[<?= (int)$smsSent ?>,<?= (int)$smsPending ?>,<?= (int)$smsFailed ?>],backgroundColor:['#69A9A3','#E8C36A','#D88992'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{display:false}}}});
 
-    plugins: {
-        legend: {
-            display: false
-        }
-    }
-}
-});
+    const initialIndex = Math.max(0, weeklyStats.findIndex(x => x.date === initialDate));
+    applyDayStats(initialIndex);
+})();
 </script>

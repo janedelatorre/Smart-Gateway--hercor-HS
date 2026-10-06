@@ -2,7 +2,8 @@
  * =====================================================================
  * STUDENTS MODULE - front-end logic
  * Handles: AJAX table load, search/filter, pagination, add/edit modal,
- * webcam capture, and face-api.js descriptor extraction (used ONLY as
+ * profile-photo upload (students.photo), webcam capture, and face-api.js
+ * descriptor extraction (students.face_encoding — used ONLY as
  * backup biometric data - primary auth remains the barcode).
  * =====================================================================
  */
@@ -48,15 +49,15 @@ function renderStudentsTable(students) {
     }
     tbody.innerHTML = students.map(s => `
         <tr>
-            <td><div class="avatar-circle">${s.photo ? `<img src="../uploads/student/${s.photo}">` : '<i class="bi bi-person-fill"></i>'}</div></td>
-            <td>${s.student_id}</td>
-            <td>${s.fullname}</td>
-            <td>${s.grade}</td>
-            <td>${s.contact_number ?? '-'}</td>
+            <td><div class="avatar-circle">${s.photo ? `<img src="../uploads/student/${encodeURIComponent(s.photo)}">` : '<i class="bi bi-person-fill"></i>'}</div></td>
+            <td>${sgEscapeHtml(s.student_id)}</td>
+            <td>${sgEscapeHtml(s.fullname)}</td>
+            <td>${sgEscapeHtml(s.grade)}</td>
+            <td>${sgEscapeHtml(s.contact_number ?? '-')}</td>
             <td>${s.status === 'Active' ? '<span class="badge-match">Active</span>' : '<span class="badge-denied">Inactive</span>'}</td>
             <td>
-                <button class="btn btn-sm btn-light" onclick='openEditStudent(${JSON.stringify(s)})' title="Edit"><i class="bi bi-pencil-fill text-primary"></i></button>
-                <button class="btn btn-sm btn-light" onclick="deleteStudent(${s.id})" title="Delete"><i class="bi bi-trash-fill text-danger"></i></button>
+                <button class="btn btn-sm sg-action-edit" onclick='openEditStudent(${sgEscapeHtml(JSON.stringify(s))})' title="Edit"><i class="bi bi-pencil-fill text-primary"></i></button>
+                <button class="btn btn-sm sg-action-delete" onclick="deleteStudent(${s.id})" title="Delete"><i class="bi bi-trash-fill text-danger"></i></button>
             </td>
         </tr>
     `).join('');
@@ -87,9 +88,9 @@ function openAddStudent() {
     document.getElementById('studentModalTitle').textContent = 'Add New Student';
     document.getElementById('studentForm').reset();
     document.getElementById('studentDbId').value = '';
-    document.getElementById('photoDataInput').value = '';
     document.getElementById('studentIdInput').disabled = false;
     resetCaptureBox();
+    resetProfilePhotoPreview();
 }
 
 function openEditStudent(student) {
@@ -106,11 +107,8 @@ function openEditStudent(student) {
     form.email.value = student.email || '';
     form.status.value = student.status;
     resetCaptureBox();
-    if (student.photo) {
-        document.getElementById('capturedPhoto').src = `../uploads/student/${student.photo}`;
-        document.getElementById('capturedPhoto').classList.remove('d-none');
-        document.getElementById('capturePlaceholder').classList.add('d-none');
-    }
+    resetProfilePhotoPreview(student.photo ? `../uploads/student/${encodeURIComponent(student.photo)}` : '');
+    document.getElementById('faceOnFileNote').classList.toggle('d-none', !Number(student.has_face));
     new bootstrap.Modal(document.getElementById('studentModal')).show();
 }
 
@@ -121,9 +119,38 @@ function resetCaptureBox() {
     document.getElementById('startCameraBtn').classList.remove('d-none');
     document.getElementById('captureBtn').classList.add('d-none');
     document.getElementById('retakeBtn').classList.add('d-none');
-    document.getElementById('photoDataInput').value = '';
+    document.getElementById('faceOnFileNote').classList.add('d-none');
+    delete document.getElementById('studentForm').dataset.faceDescriptor; // never carry a previous capture into another student
     stopCamera();
 }
+
+// ---- Student Profile Photo (students.photo) — separate from the face capture above ----
+function resetProfilePhotoPreview(url = '') {
+    const img = document.getElementById('profilePhotoPreview');
+    document.getElementById('profilePhotoInput').value = '';
+    img.src = url;
+    img.classList.toggle('d-none', !url);
+    document.getElementById('profilePhotoPlaceholder').classList.toggle('d-none', !!url);
+}
+
+document.getElementById('profilePhotoInput').addEventListener('change', function () {
+    const file = this.files[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        sgToast('error', 'Profile photo must be a JPG, PNG, or WEBP image.');
+        this.value = '';
+        return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+        sgToast('error', 'Profile photo must be 5 MB or smaller.');
+        this.value = '';
+        return;
+    }
+    const img = document.getElementById('profilePhotoPreview');
+    img.src = URL.createObjectURL(file);
+    img.classList.remove('d-none');
+    document.getElementById('profilePhotoPlaceholder').classList.add('d-none');
+});
 
 // ---- Webcam capture (WebcamJS-style using native getUserMedia) ----
 document.getElementById('startCameraBtn').addEventListener('click', async () => {
@@ -138,10 +165,18 @@ document.getElementById('startCameraBtn').addEventListener('click', async () => 
 
         if (!faceModelsLoaded) {
             // Load face-api.js models lazily (tiny face detector) for backup face descriptor
-            await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-            await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-            await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-            faceModelsLoaded = true;
+            // Self-hosted (Phase 2) — was CDN (justadudewhohacks.github.io)
+            const MODEL_URL = (window.SG_APP_URL || '') + '/assets/models';
+            try {
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+            } catch (modelErr) {
+                // MODEL LOAD ERROR — distinct from a camera problem; don't mislabel it as one.
+                sgToast('error', 'Facial recognition models could not be loaded. Please try again or contact staff.');
+                return;
+            }
+            faceModelsLoaded = true; // MODEL READY
         }
     } catch (err) {
         sgToast('error', 'Camera access denied or unavailable');
@@ -161,7 +196,8 @@ document.getElementById('captureBtn').addEventListener('click', async () => {
     video.classList.add('d-none');
     document.getElementById('captureBtn').classList.add('d-none');
     document.getElementById('retakeBtn').classList.remove('d-none');
-    document.getElementById('photoDataInput').value = dataUrl;
+    // The captured frame is used ONLY to compute the face descriptor below (students.face_encoding).
+    // It is never uploaded and never becomes students.photo.
 
     // Extract face descriptor for future backup verification (best-effort)
     try {
@@ -187,10 +223,32 @@ function stopCamera() {
     }
 }
 
+// PHASE 3: mirrors sg_normalize_ph_mobile()/sg_is_valid_ph_mobile() in
+// includes/security.php -- this is a UX shortcut only, the server is the
+// real authority and re-validates/normalizes independently in api/student.php.
+function sgNormalizePhMobileClient(raw) {
+    const stripped = String(raw || '').trim().replace(/[\s\-.()]/g, '');
+    if (/^09\d{9}$/.test(stripped)) return stripped;
+    if (/^\+639\d{9}$/.test(stripped)) return '0' + stripped.slice(3);
+    if (/^639\d{9}$/.test(stripped)) return '0' + stripped.slice(2);
+    return null;
+}
+
 // ---- Save (Add/Edit) via AJAX ----
 document.getElementById('studentForm').addEventListener('submit', function (e) {
     e.preventDefault();
+
+    const contactInput = this.elements['contact_number'];
+    const normalizedContact = sgNormalizePhMobileClient(contactInput.value);
+    if (normalizedContact === null) {
+        sgToast('error', 'Invalid contact number. Use 09XXXXXXXXX (11 digits) or +639XXXXXXXXX.');
+        contactInput.focus();
+        return;
+    }
+    contactInput.value = normalizedContact; // show the canonical form immediately
+
     const formData = new FormData(this);
+    formData.set('contact_number', normalizedContact);
     formData.append('action', document.getElementById('studentDbId').value ? 'update' : 'create');
     formData.append('face_descriptor', this.dataset.faceDescriptor || '');
 

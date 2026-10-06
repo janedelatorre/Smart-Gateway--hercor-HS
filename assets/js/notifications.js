@@ -85,11 +85,23 @@ function loadNotifications() {
     }).catch(() => {});
 }
 
+// PHASE 3: drains the server-side SMS retry queue (Case A — server reachable,
+// SMS provider/Internet was down when the message was first attempted).
+// Reuses this existing poll instead of adding a second timer; a queued
+// message otherwise only retries the next time a new scan happens to fire
+// the opportunistic flush in api/sms.php sg_notify_entry().
+const API_SMS_QUEUE = '../api/sms.php';
+function flushSmsQueue() {
+    sgPost(API_SMS_QUEUE, { action: 'flush_queue', csrf_token: sgNotifCsrf() }).catch(() => {});
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     if (!document.getElementById('sgNotifBtn')) return;
 
     loadNotifications();
     setInterval(loadNotifications, NOTIF_POLL_MS);
+    flushSmsQueue();
+    setInterval(flushSmsQueue, NOTIF_POLL_MS);
 
     const markAllBtn = document.getElementById('sgNotifMarkAll');
     if (markAllBtn) {

@@ -26,13 +26,13 @@ function renderUsersTable(users) {
     }
     tbody.innerHTML = users.map(u => `
         <tr>
-            <td>${u.username}</td>
-            <td>${u.fullname}</td>
-            <td>${u.role}</td>
+            <td>${sgEscapeHtml(u.username)}</td>
+            <td>${sgEscapeHtml(u.fullname)}</td>
+            <td>${sgEscapeHtml(u.role)}</td>
             <td>${u.status === 'Active' ? '<span class="badge-match">Active</span>' : '<span class="badge-denied">Inactive</span>'}</td>
             <td>
-                <button class="btn btn-sm btn-light" onclick='openEditUser(${JSON.stringify(u)})'><i class="bi bi-pencil-fill text-primary"></i></button>
-                <button class="btn btn-sm btn-light" onclick="deleteUser(${u.id})"><i class="bi bi-trash-fill text-danger"></i></button>
+                <button class="btn btn-sm sg-action-edit" onclick='openEditUser(${sgEscapeHtml(JSON.stringify(u))})'><i class="bi bi-pencil-fill text-primary"></i></button>
+                <button class="btn btn-sm sg-action-delete" onclick="deleteUser(${u.id})"><i class="bi bi-trash-fill text-danger"></i></button>
             </td>
         </tr>
     `).join('');
@@ -56,7 +56,7 @@ function openAddUser() {
     document.getElementById('userForm').reset();
     document.getElementById('userDbId').value = '';
     document.getElementById('usernameInput').disabled = false;
-    document.getElementById('passwordHint').textContent = '(required)';
+    document.getElementById('passwordHint').textContent = '(minimum 6 characters)';
     document.querySelector('#userForm [name=password]').required = true;
 }
 
@@ -71,7 +71,7 @@ function openEditUser(user) {
     form.contact_number.value = user.contact_number || '';
     form.role.value = user.role;
     form.status.value = user.status;
-    document.getElementById('passwordHint').textContent = '(leave blank to keep current password)';
+    document.getElementById('passwordHint').textContent = '(minimum 6 characters)';
     form.password.required = false;
     new bootstrap.Modal(document.getElementById('userModal')).show();
 }

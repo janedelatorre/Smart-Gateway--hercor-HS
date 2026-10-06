@@ -2,8 +2,9 @@
 require_once __DIR__ . '/../database/config.php';
 require_login();
 
-$pageTitle = 'Entry Logs';
-$pageHeading = 'Entry Logs';
+$pageTitle = 'Entry & Exit Logs';
+$pageHeading = 'Entry & Exit Logs';
+$pageSubheading = 'Review recorded campus gate verification transactions';
 $activePage = 'entry_logs';
 require_once __DIR__ . '/../includes/header.php';
 ?>
@@ -14,11 +15,10 @@ require_once __DIR__ . '/../includes/header.php';
     <main class="sg-main">
         <div class="sg-card">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h5 class="fw-bold mb-0">Entry Logs</h5>
+                
                 <div class="d-flex gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" onclick="exportLogs('pdf')"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="exportLogs('pdf')"><i class="bi bi-printer me-1"></i>Print / Save as PDF</button>
                     <button class="btn btn-outline-secondary btn-sm" onclick="exportLogs('excel')"><i class="bi bi-file-earmark-excel me-1"></i>Export Excel</button>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
                 </div>
             </div>
 
@@ -49,12 +49,27 @@ require_once __DIR__ . '/../includes/header.php';
                         <option value="Facial Recognition">Facial Recognition</option>
                     </select>
                 </div>
+                <div class="col-md-2">
+                    <select id="filterTypeLog" class="form-select">
+                        <option value="">All Types</option>
+                        <option value="Entry">Entry</option>
+                        <option value="Exit">Exit</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select id="filterGradeLog" class="form-select">
+                        <option value="">All Grade Levels</option>
+                        <?php for ($g = 7; $g <= 12; $g++): ?>
+                            <option value="Grade <?= $g ?>">Grade <?= $g ?></option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
             </div>
 
             <div class="table-responsive">
                 <table class="table table-sg align-middle">
                     <thead>
-                        <tr><th>Date</th><th>Time In</th><th>Student ID</th><th>Name</th><th>Grade</th><th>Method</th><th>Status</th><th>Verified By</th></tr>
+                        <tr><th>Date</th><th>Time In</th><th>Student ID</th><th>Name</th><th>Grade</th><th>Method</th><th>Type</th><th>Status</th><th>Verified By</th></tr>
                     </thead>
                     <tbody id="logsTableBody">
                         <tr><td colspan="8" class="text-center text-muted py-4">Loading entry logs...</td></tr>
