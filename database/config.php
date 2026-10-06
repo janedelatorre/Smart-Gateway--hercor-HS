@@ -61,9 +61,9 @@ $sgLocalDb = [
 // =====================================================================
 $sgProductionDb = [
     'host'    => 'localhost',                  // usually still 'localhost' even on shared hosting
-    'name'    => 'CHANGE_ME_db_name',          // e.g. u123456_smartgatewayproject_dev
-    'user'    => 'CHANGE_ME_db_user',          // e.g. u123456_sguser
-    'pass'    => 'CHANGE_ME_db_password',
+    'name'    => 'u483372788_Smart_gateway',          // e.g. u123456_smartgatewayproject_dev
+    'user'    => 'u483372788_smartgateway',          // e.g. u123456_sguser
+    'pass'    => 'Janelyn@18',
 ];
 
 $sgDbConfig = $sgIsLocalEnv ? $sgLocalDb : $sgProductionDb;
@@ -93,6 +93,8 @@ $sgBasePath = ($sgDocumentRoot !== '' && str_starts_with($sgProjectRoot, $sgDocu
     ? substr($sgProjectRoot, strlen($sgDocumentRoot))
     : '';
 
+define('SG_CANONICAL_BASE_URL', 'https://smartgateway-hercorhs.site');
+
 define('APP_URL', PHP_SAPI === 'cli'
     ? 'http://localhost'  // placeholder for CLI/cron contexts; not used for redirects there
     : $sgProtocol . '://' . $sgHost . $sgBasePath);
@@ -115,6 +117,14 @@ if (PHP_SAPI !== 'cli' && !headers_sent()) {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
+
+    // Keep authenticated/admin/API surfaces out of search indexes even if a
+    // crawler discovers their URLs. Public pages must explicitly opt in.
+    $sgRequestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+    if (str_starts_with($sgRequestPath, '/admin/') || str_starts_with($sgRequestPath, '/api/') ||
+        in_array(basename($sgRequestPath), ['login.php', 'forgot_password.php'], true)) {
+        header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet', true);
+    }
 }
 
 // ---- Error visibility: verbose locally, silent (logged only) in production ----
