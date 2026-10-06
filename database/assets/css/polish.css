@@ -1,0 +1,223 @@
+/* =====================================================================
+   SMART GATEWAY V22 — PHASE 5: FINAL UI/UX POLISH
+   Loaded AFTER style.css. Presentation-only: no markup, JS hooks, IDs,
+   routes or behaviour are changed. Light and dark themes share the exact
+   same layout/sizing; only colour tokens differ.
+   ===================================================================== */
+
+/* ---------- 1. Shared theme tokens (colour only) ---------- */
+html[data-theme="dark"], html:not([data-theme]) {
+  color-scheme: dark;
+  --sgp-text:#edf9ff; --sgp-text-2:#cfe2ec; --sgp-muted:#9db8c8;
+  --sgp-border:rgba(94,190,211,.24); --sgp-surface-2:rgba(255,255,255,.045);
+  --sgp-accent:#21d6ef; --sgp-focus:#5ee6f7; --sgp-th-bg:rgba(25,201,232,.08);
+  --sgp-row-hover:rgba(25,201,232,.07); --sgp-input-bg:rgba(3,24,39,.72);
+}
+html[data-theme="light"] {
+  color-scheme: light;
+  --sgp-text:#172033; --sgp-text-2:#334155; --sgp-muted:#566579;
+  --sgp-border:#d3dde8; --sgp-surface-2:#f3f7fb;
+  --sgp-accent:#0a7f9a; --sgp-focus:#0a7f9a; --sgp-th-bg:#e8f0f7;
+  --sgp-row-hover:#eef5fa; --sgp-input-bg:#ffffff;
+}
+
+/* ---------- 2. Typography floor (nothing below ~11px) ---------- */
+body { font-size:14px; line-height:1.5; }
+.sg-sidebar .brand strong { font-size:14px; }
+.sg-sidebar .brand small { font-size:10.5px; }
+.sg-sidebar .nav-link { font-size:13px; min-height:36px; gap:10px !important; }
+.sg-sidebar .nav-link i { font-size:15px; width:16px; }
+.sg-dashboard-title-wrap h1, .sg-topbar h1 { font-size:clamp(17px,2vw,22px) !important; line-height:1.15; letter-spacing:.01em; }
+.sg-dashboard-title-wrap p, .sg-topbar p { font-size:12px !important; }
+.sg-profile-copy strong, .sg-profile-copy .name { font-size:13px; }
+.sg-profile-copy small, .sg-profile-copy .role { font-size:11.5px; }
+.sg-card h2, .sg-card-heading h2 { font-size:14.5px !important; letter-spacing:0; }
+.sg-card h3 { font-size:14px !important; }
+.sg-card h4 { font-size:13.5px !important; }
+.sg-stat-label { font-size:12px !important; font-weight:600; }
+.sg-stat-sub { font-size:11.5px; }
+.sg-stat-value, .stat-value { font-size:clamp(22px,2.2vw,28px) !important; line-height:1.1; }
+.stat-label { font-size:12px !important; font-weight:600; }
+.form-label { font-size:12.5px; font-weight:600; margin-bottom:.3rem !important; }
+.form-text, small, .small { font-size:12px; }
+.form-control, .form-select { font-size:13.5px !important; min-height:38px; border-radius:8px !important; }
+.form-control-sm, .form-select-sm { min-height:32px; font-size:12.5px !important; }
+.btn { font-size:13px; font-weight:600; border-radius:8px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; gap:.35rem; }
+.btn-sm { font-size:12.5px; min-height:30px; }
+.badge, [class^="badge-"], [class*=" badge-"] { font-size:11.5px; font-weight:600; }
+
+/* ---------- 3. Focus / hover / disabled visibility ---------- */
+:focus-visible { outline:2px solid var(--sgp-focus) !important; outline-offset:2px; }
+.form-control:focus, .form-select:focus { border-color:var(--sgp-accent) !important; box-shadow:0 0 0 .2rem rgba(25,201,232,.22) !important; }
+.btn:disabled, .btn.disabled, .form-control:disabled, .form-select:disabled { opacity:.6 !important; cursor:not-allowed; }
+.form-control[readonly] { opacity:1; }
+.sg-sidebar .nav-link:hover { background:var(--sgp-row-hover) !important; }
+.table > tbody > tr:hover > * { background-color:var(--sgp-row-hover); }
+
+/* ---------- 4. Muted / helper text contrast in both themes ---------- */
+.text-muted, .form-text, .sg-stat-sub, .sg-report-note, .sg-report-meta, .sg-report-footer { color:var(--sgp-muted) !important; }
+html[data-theme="light"] .text-muted { color:#566579; }
+html[data-theme="light"] .form-control::placeholder, html[data-theme="dark"] .form-control::placeholder { opacity:1; }
+html[data-theme="dark"] .form-control::placeholder { color:#7f9db0 !important; }
+
+/* ---------- 5. Buttons that were unreadable in one theme ---------- */
+html[data-theme="light"] .btn-outline-light,
+html[data-theme="light"] .btn-outline-secondary { color:#26364b !important; border-color:#9fb1c4 !important; background:#fff !important; }
+html[data-theme="light"] .btn-outline-light:hover,
+html[data-theme="light"] .btn-outline-secondary:hover { background:#e8f0f7 !important; color:#0f1b2d !important; }
+html[data-theme="light"] .btn-outline-info { color:#0a6f88; border-color:#0a7f9a !important; background:#fff !important; }
+html[data-theme="light"] .btn-outline-info:hover { background:#0a7f9a !important; color:#fff !important; }
+html[data-theme="light"] .btn-outline-primary { color:#0b5ed7; border-color:#0b5ed7 !important; }
+html[data-theme="light"] .btn-outline-primary:hover { color:#fff !important; background:#0b5ed7 !important; }
+html[data-theme="dark"] .btn-outline-light { color:#e6f4fa; border-color:rgba(230,244,250,.55) !important; }
+html[data-theme="dark"] .btn-outline-light:hover { background:rgba(230,244,250,.14) !important; color:#fff !important; }
+html[data-theme="light"] .btn-sg-primary, html[data-theme="light"] .btn-primary { background:linear-gradient(135deg,#0d93b3,#0a7f9a) !important; border-color:#0a7f9a !important; color:#fff; }
+.btn:disabled.btn-outline-light, html[data-theme="light"] .btn:disabled { opacity:.55 !important; }
+
+/* ---------- 6. Switches, checkboxes, form labels (settings) ---------- */
+.form-check-label { color:var(--sgp-text) !important; font-size:13px; font-weight:600; opacity:1; }
+html[data-theme="light"] .form-check-input:not(:checked) { background-color:#e4ebf3 !important; border-color:#8fa3b8 !important; }
+html[data-theme="light"] .form-check-input:checked { background-color:#0a7f9a !important; border-color:#0a7f9a !important; }
+html[data-theme="dark"] .form-check-input:not(:checked) { background-color:rgba(255,255,255,.08) !important; border-color:rgba(157,184,200,.6) !important; }
+.form-switch .form-check-input { width:2.4em; height:1.25em; cursor:pointer; }
+.sg-kiosk-user-option input[type="checkbox"] { flex:0 0 auto; width:1.1rem; height:1.1rem; accent-color:var(--sgp-accent); }
+.sg-kiosk-user-option strong { font-size:13px; }
+.sg-kiosk-user-option small { font-size:11.5px; }
+
+/* ---------- 7. Date / calendar pickers (visible in dark mode) ---------- */
+/* ROOT CAUSE (isolated/confirmed): Bootstrap's own .form-control rule sets
+   appearance:none on every form control, including type="date"/"time".
+   That strips Chromium's native control rendering, which is also what
+   normally makes the calendar-picker icon auto-follow color-scheme (so it
+   was rendering dark/invisible on a dark background even with color-scheme
+   correctly set to dark and no filter applied). Restoring the native
+   appearance on just these two input types fixes the icon in both themes
+   without touching how any other control looks. */
+input[type="date"].form-control, input[type="time"].form-control,
+input[type="date"], input[type="time"] { appearance:auto; -webkit-appearance:auto; }
+html[data-theme="dark"] input[type="date"], html[data-theme="dark"] input[type="time"], html[data-theme="dark"] select.form-select { color-scheme:dark; }
+/* PHASE 6: no filter here in dark mode -- color-scheme:dark (section 1
+   above) already makes Chromium/WebKit render this native icon light on
+   its own; inverting on top of that turns it back dark/invisible (verified
+   with an isolated test page). This covers bare input[type="date"] without
+   the .sg-date-field wrapper (e.g. Entry Logs / Audit Logs filters), which
+   style.css's .sg-date-field-scoped rules don't reach. */
+html[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+html[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator { cursor:pointer; }
+html[data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator { opacity:.8; cursor:pointer; }
+html[data-theme="dark"] .form-select option { background:#06253a; color:#edf9ff; }
+
+/* ---------- 8. Tables: readable, no layout-breaking long text ---------- */
+.table { font-size:13px; }
+.table thead th, .table-sg thead th, .sg-dashboard-table thead th, .sg-report-table th {
+  font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
+.table td, .table th, .sg-dashboard-table td { padding:.6rem .75rem; vertical-align:middle; overflow-wrap:anywhere; }
+.table td .small, .table td small { font-size:11.5px; }
+.table-responsive { -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+td:has(> .btn), td:has(> .d-flex) { white-space:nowrap; overflow-wrap:normal; }
+html[data-theme="dark"] .table > :not(caption) > * > *,
+html[data-theme="dark"] .table-sg td, html[data-theme="dark"] .sg-report-table td,
+html[data-theme="dark"] .sg-dashboard-table td { color:var(--sgp-text-2) !important; background-color:transparent !important; border-color:var(--sgp-border) !important; }
+html[data-theme="dark"] .table thead th, html[data-theme="dark"] .table-sg thead th,
+html[data-theme="dark"] .sg-report-table th { background:var(--sgp-th-bg) !important; color:var(--sgp-muted) !important; }
+html[data-theme="light"] .sg-report-table td, html[data-theme="light"] .sg-report-table th { color:#334155; background:transparent !important; border-color:#e2e8f0 !important; }
+html[data-theme="light"] .sg-report-table th { background:var(--sgp-th-bg) !important; color:#475569 !important; }
+.sg-report-table { font-size:13px !important; }
+.sg-report-table td .text-muted, .sg-report-table td .small { color:var(--sgp-muted); }
+.table-empty, td.text-muted[colspan] { padding:1.25rem .75rem !important; text-align:center; }
+
+/* Pagination / search / filters */
+/* PHASE 6: confines pagination to a horizontal scroller instead of ever
+   pushing the page itself wider (e.g. a filtered result set with many
+   pages) -- purely defensive, the page-number click behavior/JS is
+   unchanged. */
+nav:has(> .pagination) { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.pagination { flex-wrap:nowrap; }
+.pagination .page-item { flex:0 0 auto; }
+.pagination .page-link { min-width:36px; min-height:36px; display:flex; align-items:center; justify-content:center; text-align:center; font-size:13px; border-radius:8px; }
+.pagination .page-item.disabled .page-link { opacity:.45; }
+.sg-filter-row, .sg-toolbar { gap:.5rem; }
+
+/* ---------- 9. Dashboard hierarchy ---------- */
+.sg-welcome { font-size:clamp(16px,1.6vw,19px) !important; font-weight:700; margin:2px 0 8px !important; }
+.sg-dashboard-grid { gap:12px !important; }
+.sg-stat-grid { margin-bottom:12px; }
+.sg-chart-grid, .sg-bottom-grid { grid-template-columns:minmax(0,2.25fr) minmax(300px,1fr) !important; gap:12px !important; margin-bottom:12px; }
+.sg-dashboard-card, .sg-card { border-radius:12px; }
+.sg-dashboard-table td, .sg-dashboard-table th { padding:.55rem .6rem; }
+.sg-dashboard-table td strong, .sg-dashboard-table .name { font-size:13px; }
+.sg-weekly-chart-wrap { min-height:200px; }
+
+/* ---------- 10. Reports & analytics: chart sizing + KPI readability ---------- */
+.sg-reports-page .sg-report-chart-wrap { height:200px; min-height:200px !important; }
+.sg-reports-page .sg-report-method-wrap { height:190px !important; }
+.sg-analytics-chart-wrap { height:220px; }
+.sg-analytics-chart-tall { height:250px !important; }
+.sg-report-kpi { min-height:74px; }
+.sg-report-kpi .stat-value { font-size:22px; }
+.sg-report-kpi .stat-label { font-size:12px; }
+html[data-theme="light"] .sg-report-kpi .stat-value, html[data-theme="light"] .sg-report-kpi .stat-label,
+html[data-theme="light"] .sg-report-summary p { color:#1c2a3f !important; }
+html[data-theme="light"] .sg-report-kpi .stat-label { color:#3d4d63; }
+.sg-report-summary p { font-size:13.5px; }
+.sg-report-meta { font-size:11.5px; }
+.sg-report-footer { font-size:11px; }
+.sg-report-cover-title p, .sg-report-brand-line p { font-size:12px; }
+.sg-analytics-insights span { font-size:12px; }
+/* Report cover keeps its dark letterhead in both themes — make its text explicit. */
+.sg-report-cover, .sg-report-cover * { --sgp-text:#eef8fc; }
+html[data-theme="light"] .sg-report-cover-title h1, html[data-theme="light"] .sg-report-brand-line h2 { color:#fff; }
+html[data-theme="light"] .sg-report-cover-title p, html[data-theme="light"] .sg-report-brand-line p { color:#c5d8e2; }
+
+/* ---------- 11. Cards / settings / profile compactness ---------- */
+.sg-card .mb-3, .sg-card .mb-4 { margin-bottom:.7rem !important; }
+.sg-card form .row.g-3 { --bs-gutter-y:.6rem; }
+.sg-card .form-text { margin-top:.2rem; line-height:1.35; }
+.sg-card-heading { margin-bottom:.6rem; }
+.sg-card .btn.mt-3, .sg-card .btn.mt-4 { margin-top:.5rem !important; }
+.sg-card-heading h2, .sg-card > h2, .sg-card > h3 { margin-bottom:.5rem; }
+
+/* ---------- 12. Header / navigation responsiveness ---------- */
+.sg-topbar, .sg-dashboard-topbar { flex-wrap:nowrap; gap:10px; min-height:56px; }
+.sg-dashboard-title-wrap { min-width:0; flex:1 1 auto; }
+.sg-dashboard-title-wrap > div { min-width:0; }
+.sg-dashboard-title-wrap h1 { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sg-topbar-actions { flex:0 0 auto; }
+.sg-profile-copy strong, .sg-profile-copy small { max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
+.sg-notification-button, .sg-theme-toggle, .sg-profile-button, #sgSidebarToggle { min-width:40px; min-height:40px; }
+@media (max-width:991.98px) {
+  .sg-topbar-actions .btn span.label-text, .sg-theme-toggle .label-text { display:none; }
+}
+@media (max-width:575.98px) {
+  .sg-dashboard-title-wrap h1 { font-size:15px !important; }
+  .sg-dashboard-title-wrap p { display:none; }
+  .sg-dashboard-actions { gap:6px !important; }
+  .sg-dashboard-content, .sg-content { padding-left:10px; padding-right:10px; }
+  .table { font-size:12.5px; }
+}
+
+/* ---------- 13. Scanner / kiosk ---------- */
+.sg-kiosk-scan-id-input, #deviceScanInput {
+  color:var(--sgp-text) !important; background:var(--sgp-input-bg) !important;
+  border:1px solid var(--sgp-border) !important; font-size:16px; font-weight:600; text-align:center; letter-spacing:.06em; }
+html[data-theme="light"] .sg-kiosk-scan-id-input, html[data-theme="light"] #deviceScanInput { color:#172033; }
+.sg-kiosk-scan-id-input::placeholder, #deviceScanInput::placeholder { color:var(--sgp-muted) !important; opacity:1; font-weight:500; letter-spacing:0; }
+.sg-kiosk-scan-id-label { font-size:12px; letter-spacing:.08em; }
+#resultStatus { font-size:clamp(20px,3vw,28px); font-weight:800; letter-spacing:.02em; overflow-wrap:anywhere; }
+#resultDetails { font-size:14px; overflow-wrap:anywhere; }
+#resultDetails .fs-5 { font-size:clamp(17px,2.4vw,22px) !important; }
+.sg-scan-entry-fullscreen #resultPanel { padding:1rem; }
+.sg-kiosk-result-photo { max-width:110px; border-radius:12px; }
+@media (max-width:575.98px) { #resultStatus { font-size:20px; } }
+
+/* ---------- 14. Modals / dropdown menus ---------- */
+.modal-content { border-radius:14px; }
+.modal-title { font-size:16px; font-weight:700; }
+.modal-body dt { font-weight:600; color:var(--sgp-muted); font-size:12.5px; }
+.modal-body dd { overflow-wrap:anywhere; }
+.dropdown-menu { font-size:13px; border-radius:10px; }
+.dropdown-item { padding:.5rem .9rem; }
+
+/* ---------- 15. Login / role-select accessibility (no layout change) ---------- */
+.login-wrapper .form-control { min-height:42px; }
+.login-wrapper .form-label { font-size:12.5px !important; }
