@@ -94,7 +94,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
   <section class="sg-report-document" id="reportDocument">
     <header class="sg-report-cover mb-3">
-      <div class="sg-report-brand-line"><div class="sg-report-logo"><img src="<?=APP_URL?>/assets/images/logo/school-logo.png" alt="Hercor College"></div><div><h2><?=e($reportSchoolName)?></h2><p><?=e($reportSchoolAddress)?><?=($reportSchoolAddress && $reportSchoolContact)?' · ':''?><?=e($reportSchoolContact)?></p></div></div>
+      <div class="sg-report-brand-line">
+        <div class="sg-report-logos" aria-label="Hercor College institutional logos">
+          <img class="sg-report-college-logo" src="<?=APP_URL?>/assets/images/logo/hercor-college-logo.png" alt="Hercor College official logo">
+          <img class="sg-report-hs-logo" src="<?=APP_URL?>/assets/images/logo/school-logo.png" alt="Hercor College High School Department logo">
+        </div>
+        <div class="sg-report-institution">
+          <h2>HERCOR COLLEGE</h2>
+          <p>HIGH SCHOOL DEPARTMENT</p>
+          <span><?=e($reportSchoolContact ?: 'Tel. No. (036) 620 0418')?></span>
+        </div>
+      </div>
       <div class="sg-report-cover-title"><span>OFFICIAL SYSTEM REPORT</span><h1><?=e($reportTitle)?></h1><p><?=e($grade ?: 'All Grade Levels')?> &nbsp;•&nbsp; <?=e(date('F j, Y',strtotime($dateFrom)))?> – <?=e(date('F j, Y',strtotime($dateTo)))?></p></div>
     </header>
 

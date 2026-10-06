@@ -99,9 +99,6 @@ function exportLogs(type) {
         link.href = URL.createObjectURL(blob);
         link.download = 'entry_logs.csv';
         link.click();
-    } else {
-        sgToast('info', 'Use your browser\'s Print dialog and choose "Save as PDF".');
-        window.print();
     }
 }
 

@@ -128,7 +128,9 @@ LP2=$(curl -s -c /tmp/jar_lock.txt -b /tmp/jar_lock.txt "$BASE/login.php?role=ad
 echo "$LP2" | grep -qi "locked\|captcha" && pass "repeated failed logins triggered lockout/CAPTCHA" || fail "no lockout/CAPTCHA observed after 6 failed attempts"
 
 echo "=== TEST 13: Logout invalidates session ==="
-curl -s -b "$JAR_STAFF" -c "$JAR_STAFF" "$BASE/admin/logout.php?confirm=1" > /dev/null
+# Logout is POST + CSRF only (a GET never logs out): read the token from the confirmation page, then POST it.
+LOGOUT_CSRF=$(curl -s -b "$JAR_STAFF" -c "$JAR_STAFF" "$BASE/admin/logout.php" | grep -o 'name="csrf_token" value="[^"]*"' | head -1 | sed 's/.*value="\(.*\)"/\1/')
+curl -s -b "$JAR_STAFF" -c "$JAR_STAFF" "$BASE/admin/logout.php" --data-urlencode "csrf_token=$LOGOUT_CSRF" > /dev/null
 POST_LOGOUT=$(curl -s -b "$JAR_STAFF" "$BASE/api/student.php?action=list")
 echo "$POST_LOGOUT" | grep -qi '"success":false' && pass "session invalidated after logout (API request now rejected)" || fail "session still valid after logout"
 

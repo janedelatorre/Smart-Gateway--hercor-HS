@@ -17,7 +17,6 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                 
                 <div class="d-flex gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" onclick="exportLogs('pdf')"><i class="bi bi-printer me-1"></i>Print / Save as PDF</button>
                     <button class="btn btn-outline-secondary btn-sm" onclick="exportLogs('excel')"><i class="bi bi-file-earmark-excel me-1"></i>Export Excel</button>
                 </div>
             </div>

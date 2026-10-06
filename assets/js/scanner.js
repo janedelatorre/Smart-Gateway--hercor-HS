@@ -110,6 +110,8 @@ function sgClearServerUnavailable() {
     resetDeviceScanInput();
     setScanIconState('idle');
     document.getElementById('barcodeHint').textContent = 'Connection restored. Please scan your student ID to verify your campus access.';
+    // Facial fallback was unlocked when the connection dropped (camera was stopped then): reopen it.
+    if (facialFallbackUnlocked && !faceStream && !faceProcessing) startFaceCapture();
 }
 
 // How long a completed result stays on screen before the kiosk
@@ -138,6 +140,25 @@ const FACE_STABLE_HOLD_MS = 900;       // how long a face must stay detected bef
 const FACE_DETECTION_POLL_MS = 200;    // how often we check for a stable face
 const FACE_STABILITY_TIMEOUT_MS = 15000; // if nothing stabilizes in this long, offer a manual fallback
 
+// ---- Facial ATTEMPT counting (see performFaceCapture) ----
+// Only "face detected AND compared against registered faces AND not recognized"
+// is a failed attempt, and the SERVER owns the real count (api/face.php).
+// faceFailCount is a display-only mirror of it. "No face in frame" never
+// reaches the server, so it can never be counted.
+let faceFailCount = (window.SG_INITIAL_FACE_GATE && window.SG_INITIAL_FACE_GATE.faceAttempts) || 0;
+let faceMaxAttempts = (window.SG_INITIAL_FACE_GATE && window.SG_INITIAL_FACE_GATE.faceMaxAttempts) || 3;
+let faceCooldownUntil = 0;               // debounce: no new attempt may start before this timestamp
+let faceTimeoutTimer = null;
+const FACE_RETRY_COOLDOWN_MS = 3000;     // pause after a counted failure before the next attempt may start
+
+/** Face-panel status line. warn=true tints it; otherwise the current "n/max failed attempts" is appended while camera is retrying. */
+function setFaceHint(message, warn) {
+    const el = document.getElementById('faceHint');
+    el.classList.toggle('text-warning', !!warn);
+    el.textContent = (!warn && faceFailCount > 0 && facialFallbackUnlocked)
+        ? `${message} (${faceFailCount}/${faceMaxAttempts} failed attempts)` : message;
+}
+
 // Mirrors the SERVER's barcode-failure-streak state (see api/scan.php /
 // api/face.php + is_facial_fallback_unlocked() in includes/security.php).
 // This is display-only — api/face.php independently re-checks the real
@@ -157,6 +178,12 @@ function updateFaceGateUI(unlocked, attemptsRemaining) {
             setTimeout(() => startFaceCapture(), 80);
         }
     } else {
+        // Gate is locked: make sure no camera/loop is left running and the
+        // countdown text (hidden while the camera was open) is visible again.
+        if (faceStream) stopFaceCamera();
+        faceFailCount = 0;
+        faceCooldownUntil = 0;
+        idle.classList.remove('d-none');
         const remaining = typeof attemptsRemaining === 'number' ? attemptsRemaining : facialFallbackThreshold;
         idle.innerHTML = `<i class="bi bi-camera-video-off fs-1 d-block mb-2"></i>Unlocks after ${remaining} more failed barcode scan${remaining === 1 ? '' : 's'}`;
     }
@@ -392,6 +419,7 @@ function showBarcodeNotFound(reason, unlocked, attemptsRemaining) {
 // STEP 2: BACKUP FACIAL RECOGNITION (ONLY ON BARCODE FAILURE / MANUAL)
 // =====================================================================
 async function startFaceCapture() {
+    faceCooldownUntil = 0;
     document.getElementById('faceIdle').classList.add('d-none');
     document.getElementById('faceCorners').classList.remove('d-none');
     document.getElementById('facePanelWrap').classList.add('scanning');
@@ -455,39 +483,44 @@ async function startFaceCapture() {
  * interface continues waiting for a stable face automatically.
  */
 function startFaceStabilityLoop() {
+    stopFaceStabilityLoop(); // never run two loops at once
     faceStableSince = null;
     const video = document.getElementById('faceVideo');
     let timedOut = false;
 
-    const timeoutTimer = setTimeout(() => {
+    faceTimeoutTimer = setTimeout(() => {
         timedOut = true;
-        if (!faceProcessing) {
-            document.getElementById('faceHint').textContent = 'Camera is active. Position your face clearly inside the guide; verification will start automatically.';
+        if (!faceProcessing && faceStream) {
+            setFaceHint('Camera is active. Position your face clearly inside the guide; verification will start automatically.');
         }
     }, FACE_STABILITY_TIMEOUT_MS);
 
     faceDetectionInterval = setInterval(async () => {
         if (faceProcessing || !faceStream) return; // duplicate-submission guard also protects the poll loop
+        // DEBOUNCE: right after an attempt, keep the camera open but do not
+        // start another attempt (and keep showing the last result/count).
+        if (Date.now() < faceCooldownUntil) { faceStableSince = null; return; }
         let detection;
         try {
             detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
         } catch (err) {
             return; // transient detector hiccup — try again next tick, not a failure
         }
-        if (faceProcessing) return; // an in-flight capture may have started while we awaited detection
+        if (faceProcessing || !faceStream) return; // an in-flight capture may have started while we awaited detection
 
         if (!detection) {
+            // NO FACE DETECTED: NOT a failed attempt. The camera stays open
+            // and we simply keep looking until a face actually appears.
             faceStableSince = null;
-            if (!timedOut) document.getElementById('faceHint').textContent = 'Position your face inside the guide.';
+            if (!timedOut) setFaceHint('Position your face inside the guide.');
             return;
         }
         if (faceStableSince === null) {
             faceStableSince = Date.now();
-            document.getElementById('faceHint').textContent = 'Face detected. Hold still...';
+            setFaceHint('Face detected. Hold still...');
             return;
         }
         if (Date.now() - faceStableSince >= FACE_STABLE_HOLD_MS) {
-            clearTimeout(timeoutTimer);
             stopFaceStabilityLoop();
             performFaceCapture();
         }
@@ -496,7 +529,22 @@ function startFaceStabilityLoop() {
 
 function stopFaceStabilityLoop() {
     if (faceDetectionInterval) { clearInterval(faceDetectionInterval); faceDetectionInterval = null; }
+    if (faceTimeoutTimer) { clearTimeout(faceTimeoutTimer); faceTimeoutTimer = null; }
     faceStableSince = null;
+}
+
+/**
+ * Hand control back to the detection loop WITHOUT counting anything and
+ * WITHOUT closing the camera. Used for every outcome that is not a real
+ * "face compared and rejected" result (no face, detector error, rate limit,
+ * server busy/error, debounce).
+ */
+function resumeFaceDetection(message, cooldownMs, warn) {
+    faceProcessing = false;
+    faceCooldownUntil = Date.now() + (cooldownMs || 0);
+    if (!faceStream || !facialFallbackUnlocked) return; // camera/gate was closed meanwhile (e.g. barcode granted)
+    setFaceHint(message, warn);
+    startFaceStabilityLoop();
 }
 
 function failFace(message, keepCameraRunning) {
@@ -504,7 +552,10 @@ function failFace(message, keepCameraRunning) {
     stopFaceStabilityLoop();
     document.getElementById('faceHint').textContent = message;
     sgToast('error', message);
-    if (!keepCameraRunning) stopFaceCamera();
+    if (!keepCameraRunning) {
+        stopFaceCamera();
+        document.getElementById('faceIdle').innerHTML = '<i class="bi bi-camera-video-off fs-1 d-block mb-2"></i>Facial camera unavailable';
+    }
     resetFaceButtons();
 }
 
@@ -521,6 +572,7 @@ async function performFaceCapture() {
     if (faceProcessing) return;
     faceProcessing = true;
     stopFaceStabilityLoop();
+    clearAutoReset();
 
     const video = document.getElementById('faceVideo');
     const canvas = document.getElementById('faceCanvas');
@@ -528,79 +580,108 @@ async function performFaceCapture() {
     canvas.height = video.videoHeight || 240;
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    document.getElementById('faceHint').textContent = 'Analyzing face...';
+    setFaceHint('Analyzing face...');
 
     let detection;
     try {
         detection = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions())
             .withFaceLandmarks().withFaceDescriptor();
     } catch (err) {
-        stopFaceCamera();
-        // ---- E. FACIAL RECOGNITION / MODEL ERROR ----
-        document.getElementById('faceHint').textContent = 'Facial analysis failed. Please try again.';
-        showDenied('Facial analysis failed. Please try again or contact staff.', null, true);
-        resetFaceButtons();
-        // PHASE 6: this early return bypassed the function's own
-        // finally-block reset below, so the kiosk was left showing this
-        // denial with no timer ever scheduled to bring it back to the
-        // idle/fallback/count state -- it would sit stuck here until a
-        // human intervened. scheduleAutoReset() is the same call every
-        // other outcome in this function already relies on.
-        scheduleAutoReset();
-        return;
+        // Detector/model error: a technical problem, NOT a failed verification.
+        // Not counted; the camera stays open and the loop simply tries again.
+        return resumeFaceDetection('Facial analysis hiccup. Please hold still...', 1000);
     }
 
     if (!detection) {
-        stopFaceCamera();
-        // ---- C. NO FACE DETECTED ----
-        document.getElementById('faceHint').textContent = 'No face detected. Please position yourself in front of the camera.';
-        showDenied('No face detected. Please position yourself in front of the camera.', null, true);
-        resetFaceButtons();
-        // PHASE 6: same fix as the E branch above -- this early return was
-        // also missing scheduleAutoReset(), leaving the kiosk stuck.
-        scheduleAutoReset();
-        return;
+        // NO FACE (the person moved/left between the stable-face check and
+        // the capture). NOT a failed attempt: nothing is sent to the server,
+        // nothing is counted, no "Denied" row, and the camera stays open.
+        return resumeFaceDetection('Position your face inside the guide.', 0);
     }
 
-    stopFaceCamera();
-    document.getElementById('faceHint').textContent = 'Verifying identity...';
+    // The camera is deliberately LEFT RUNNING during verification: it only
+    // closes on success, on lockout, or when the barcode path resolves the scan.
+    setFaceHint('Verifying identity...');
 
     const descriptor = Array.from(detection.descriptor);
     try {
         const res = await sgPost(API_FACE, { action: 'verify_face', descriptor: JSON.stringify(descriptor), csrf_token: csrfToken });
+        if (sgHandleAuthLoss(res)) return;
+
         if (res.status === 'granted') {
             // ---- F. SUCCESSFUL MATCH ----
-            facialFallbackUnlocked = false; // server reset the streak on a successful face match
-            document.getElementById('faceHint').textContent = 'Verification successful.';
+            // Server reset the barcode streak and the facial counter. Stop the
+            // camera, lock the gate again and show the "Unlocks after N more
+            // failed barcode scans" countdown in the face panel.
+            stopFaceCamera();
+            facialFallbackUnlocked = false;
+            updateFaceGateUI(false, facialFallbackThreshold);
+            setFaceHint('Verification successful. Facial fallback locked.');
             showGranted(res.student, 'Facial Recognition', res.transaction_type);
-        } else if (res.status === 'duplicate') {
-            showDuplicate(res.reason, res.student);
-        } else if (res.status === 'already_inside') {
-            showAlreadyInside(res.reason, res.student, res.wait_seconds);
+        } else if (res.status === 'duplicate' || res.status === 'already_inside') {
+            // Face WAS recognized (identity resolved) — not a failure. The
+            // server consumed the fallback window, so mirror that here.
+            stopFaceCamera();
+            facialFallbackUnlocked = false;
+            updateFaceGateUI(false, facialFallbackThreshold);
+            setFaceHint('Face recognized. Facial fallback locked.');
+            if (res.status === 'duplicate') showDuplicate(res.reason, res.student);
+            else showAlreadyInside(res.reason, res.student, res.wait_seconds);
         } else if (res.status === 'throttled') {
-            showThrottled(res.reason, res.retry_after);
+            // Rate limit / server-side debounce: NOT a failed attempt.
+            if (res.reason_code !== 'face_debounce') showThrottled(res.reason, res.retry_after);
+            resumeFaceDetection('Please hold still...', (res.retry_after || 3) * 1000);
+        } else if (res.status === 'busy') {
+            resumeFaceDetection('System busy. Retrying...', 1500); // not counted
         } else if (res.status === 'error') {
-            // Backend failure on the face endpoint — reported as a system
-            // error, not as "face not recognized", for the same reason as
-            // the barcode path above. Does NOT consume/alter the streak.
-            document.getElementById('faceHint').textContent = 'Verification service is temporarily unavailable.';
+            // Backend failure on the face endpoint — a system error, not
+            // "face not recognized". Not counted. Camera stays open; retry later.
             showSystemError(res.reason, res.debug);
+            resumeFaceDetection('Verification service is temporarily unavailable.', 5000);
+        } else if (res.status === 'denied' && res.reason_code === 'no_match') {
+            // ---- D. FACE DETECTED, COMPARED, NOT RECOGNIZED = one real failed attempt ----
+            faceFailCount = res.face_attempts || (faceFailCount + 1);
+            faceMaxAttempts = res.face_max_attempts || faceMaxAttempts;
+            const attemptMsg = `Facial verification failed — ${faceFailCount}/${faceMaxAttempts} attempts`;
+            if (res.face_locked) {
+                // ---- 3rd failure: lock facial, close camera, back to barcode ----
+                stopFaceCamera();
+                facialFallbackUnlocked = false;
+                updateFaceGateUI(false, typeof res.attempts_remaining === 'number' ? res.attempts_remaining : facialFallbackThreshold);
+                setFaceHint('Facial verification is temporarily locked. Please scan your student ID barcode.', true);
+                document.getElementById('barcodeHint').textContent = 'Facial verification is temporarily locked. Please scan your student ID barcode.';
+                showDenied(`${attemptMsg}. Facial verification is temporarily locked. Please scan your student ID barcode.`, null, false, 'Facial Recognition');
+            } else {
+                setFaceHint(attemptMsg + '. Adjust your position and hold still to retry.', true);
+                showDenied(attemptMsg + '. Please try again.', null, false, 'Facial Recognition');
+                resumeFaceDetection(attemptMsg + '. Adjust your position and hold still to retry.', FACE_RETRY_COOLDOWN_MS, true);
+            }
+        } else if (res.status === 'denied' && res.reason_code === 'invalid_descriptor') {
+            resumeFaceDetection('Could not read your face clearly. Please hold still...', 1500); // not counted
+        } else if (res.status === 'denied') {
+            // Server refused facial verification outright (fallback not unlocked
+            // server-side, or facial recognition disabled in Settings): close the
+            // camera and resync the UI with the server instead of retrying.
+            stopFaceCamera();
+            facialFallbackUnlocked = false;
+            updateFaceGateUI(false, typeof res.attempts_remaining === 'number' ? res.attempts_remaining : facialFallbackThreshold);
+            setFaceHint('Facial verification is locked. Please scan your student ID barcode.', true);
+            showDenied(res.reason || 'Facial verification is not available right now.', null, false, 'System');
         } else {
-            // ---- D. FACE DETECTED BUT NO MATCH ----
-            document.getElementById('faceHint').textContent = 'Face verification failed.';
-            showDenied(res.reason || 'Face verification failed. Please try again or contact staff.', null, facialFallbackUnlocked);
+            resumeFaceDetection('Please hold still...', 5000); // unknown response: not counted
         }
     } catch (err) {
         console.error('Face verification request failed:', err);
         if (sgIsNetworkFailure(err)) {
-            // CASE B here too: the capture already happened locally, but
-            // nothing was sent anywhere and no verification/transaction
-            // occurred, so this is handled identically to the barcode path.
+            // CASE B: the server was never reached. Nothing was verified or
+            // counted. Close the camera while offline; sgClearServerUnavailable()
+            // reopens it once the connection is back.
+            stopFaceCamera();
             sgShowServerUnavailable();
             return;
         }
-        document.getElementById('faceHint').textContent = 'Verification service is temporarily unavailable.';
-        showDenied('Connection error while verifying face. Please try again.', null, facialFallbackUnlocked);
+        showSystemError('Connection error while verifying face. Please try again.');
+        resumeFaceDetection('Verification service is temporarily unavailable.', 5000); // not counted
     } finally {
         resetFaceButtons();
         if (!sgServerUnavailable) scheduleAutoReset();
@@ -608,6 +689,8 @@ async function performFaceCapture() {
 }
 
 function stopFaceCamera() {
+    stopFaceStabilityLoop();
+    document.getElementById('faceIdle').classList.remove('d-none'); // countdown/lock status visible again
     if (faceStream) { faceStream.getTracks().forEach(t => t.stop()); faceStream = null; }
     document.getElementById('faceVideo').classList.add('d-none');
     document.getElementById('faceCorners').classList.add('d-none');
@@ -751,7 +834,7 @@ function showGranted(student, method, transactionType) {
     }
 }
 
-function showDenied(reason, student, eligibleForBackup = false) {
+function showDenied(reason, student, eligibleForBackup = false, methodLabel = null) {
     document.getElementById('resultIcon').className = 'result-icon denied';
     document.getElementById('resultIcon').innerHTML = '<i class="bi bi-x-lg"></i>';
     document.getElementById('resultStatus').textContent = 'ACCESS DENIED';
@@ -761,7 +844,7 @@ function showDenied(reason, student, eligibleForBackup = false) {
         ${eligibleForBackup ? '<div class="mt-2 small text-warning">You may use backup facial recognition.</div>' : ''}
         <div class="mt-2 small">${new Date().toLocaleTimeString()}</div>
     `;
-    prependSessionRow('-', student ? student.fullname : 'Unknown', eligibleForBackup ? 'Barcode' : 'System', '-', 'Denied'); // prependSessionRow() escapes internally
+    prependSessionRow('-', student ? student.fullname : 'Unknown', methodLabel || (eligibleForBackup ? 'Barcode' : 'System'), '-', 'Denied'); // prependSessionRow() escapes internally
 }
 
 function showDuplicate(reason, student) {

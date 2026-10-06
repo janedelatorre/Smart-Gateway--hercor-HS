@@ -145,10 +145,30 @@ try {
     if (!is_facial_fallback_unlocked($pdo)) {
         echo json_encode([
             'status' => 'denied',
+            'reason_code' => 'fallback_locked',
             'reason' => 'Facial recognition is only available after ' . get_facial_fallback_threshold($pdo) . ' failed barcode attempts.',
+            'attempts_remaining' => max(0, get_facial_fallback_threshold($pdo) - get_barcode_fail_streak()),
         ]);
         exit;
     }
+
+    // DEBOUNCE (server side): two facial attempts can never be evaluated -- and
+    // so can never be counted -- closer together than SG_FACE_MIN_ATTEMPT_INTERVAL,
+    // even if a client submits camera frames in a tight loop. Not a failure.
+    $nowTs = microtime(true);
+    $lastTs = (float) ($_SESSION['face_last_attempt_at'] ?? 0);
+    if ($lastTs > 0 && ($nowTs - $lastTs) < SG_FACE_MIN_ATTEMPT_INTERVAL) {
+        echo json_encode([
+            'status' => 'throttled',
+            'reason_code' => 'face_debounce',
+            'reason' => 'Please hold still for the next facial verification attempt.',
+            'retry_after' => (int) ceil(SG_FACE_MIN_ATTEMPT_INTERVAL - ($nowTs - $lastTs)),
+            'face_attempts' => get_face_fail_count(),
+            'face_max_attempts' => SG_FACE_MAX_ATTEMPTS,
+        ]);
+        exit;
+    }
+    $_SESSION['face_last_attempt_at'] = $nowTs;
 
     $stmt = $pdo->query("SELECT * FROM students WHERE status = 'Active' AND face_encoding IS NOT NULL AND face_encoding != ''");
     $students = $stmt->fetchAll();
@@ -167,14 +187,32 @@ try {
     }
 
     if (!$bestMatch || $bestDistance > SG_FACE_THRESHOLD) {
-        // A failed facial attempt does NOT reset the streak — the fallback
-        // stays unlocked so staff can retry facial recognition without having
-        // to fail the barcode scanner N more times.
+        // A face WAS detected and compared and did not match: this is the only
+        // thing that counts as a failed facial attempt. After SG_FACE_MAX_ATTEMPTS
+        // of them facial fallback locks again: the barcode streak is reset to 0
+        // (which also clears the facial counter), so the kiosk must see the
+        // configured number of NEW failed barcode scans before facial unlocks.
         $log = $pdo->prepare("INSERT INTO entry_logs (student_id, fullname, grade, time_in, verification_method, transaction_type, verified_by, status, reason)
                                VALUES (NULL, NULL, NULL, ?, 'Facial Recognition', 'Entry', ?, 'Denied', 'Face not recognized')");
         $log->execute([date('Y-m-d H:i:s'), $verifier]);
 
-        echo json_encode(['status' => 'denied', 'reason_code' => 'no_match', 'reason' => 'Identity could not be verified. Please try again or contact staff.']);
+        $faceFails = register_face_failure();
+        $faceLocked = $faceFails >= SG_FACE_MAX_ATTEMPTS;
+        if ($faceLocked) {
+            reset_barcode_fail_streak();
+            log_activity($pdo, 'Facial Fallback Locked', 'Facial verification failed ' . SG_FACE_MAX_ATTEMPTS . ' times at this station; facial fallback locked until the barcode failure threshold is reached again.');
+        }
+
+        echo json_encode([
+            'status' => 'denied',
+            'reason_code' => 'no_match',
+            'reason' => 'Identity could not be verified. Please try again or contact staff.',
+            'face_attempts' => min($faceFails, SG_FACE_MAX_ATTEMPTS),
+            'face_max_attempts' => SG_FACE_MAX_ATTEMPTS,
+            'face_locked' => $faceLocked,
+            'facial_fallback_unlocked' => !$faceLocked,
+            'attempts_remaining' => max(0, get_facial_fallback_threshold($pdo) - get_barcode_fail_streak()),
+        ]);
         exit;
     }
 
@@ -200,6 +238,7 @@ try {
             // (exit() inside a try skips its finally block in PHP).
             release_student_scan_lock($pdo, $bestMatch['student_id']);
             $locked = false;
+            reset_barcode_fail_streak(); // face WAS recognized -> fallback has done its job; also clears the facial counter
             echo json_encode([
                 'status' => 'duplicate',
                 'reason' => 'You have already successfully scanned. Access has already been granted. Please wait a moment.',
@@ -216,6 +255,7 @@ try {
                 // api/scan.php for details.
                 release_student_scan_lock($pdo, $bestMatch['student_id']);
                 $locked = false;
+                reset_barcode_fail_streak(); // face WAS recognized -- same reasoning as 'duplicate' above
                 $waitMinutes = max(1, (int) ceil($exitCheck['wait_seconds'] / 60));
                 echo json_encode([
                     'status' => 'already_inside',

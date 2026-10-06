@@ -142,10 +142,11 @@ automatically after every granted entry. It is provider-agnostic:
   descriptor is extracted client-side and stored in `students.face_encoding` (JSON).
 - During backup verification, the captured face is compared (Euclidean distance,
   threshold `0.6`) against all Active students' stored descriptors (1:N matching).
-- Model files are loaded from the public face-api.js model CDN
-  (`https://justadudewhohacks.github.io/face-api.js/models`). For a production/offline
-  deployment, download the model weights and host them locally, then update the
-  `MODEL_URL` constants in `assets/js/students.js` and `assets/js/scanner.js`.
+- The face-api.js library (`assets/vendor/face-api/face-api.min.js`) and all model
+  files (`assets/models/`: tiny face detector, 68-point landmarks, face recognition)
+  are self-hosted. `assets/js/students.js` and `assets/js/scanner.js` load the models
+  from `<APP_URL>/assets/models`, so facial recognition works fully offline with no CDN
+  or external model source.
 
 ---
 

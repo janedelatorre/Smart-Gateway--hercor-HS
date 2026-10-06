@@ -116,19 +116,19 @@ require_once __DIR__ . '/../includes/header.php';
         <!-- Top statistics -->
         <section class="sg-dashboard-grid sg-stat-grid">
             <article class="sg-dashboard-card sg-stat-card stat-blue">
-                <div class="sg-stat-icon"><i class="bi bi-people-fill"></i></div>
+                <div class="sg-kpi-icon sg-kpi-icon-cyan" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4V20"/><circle cx="10" cy="7" r="3"/><path d="M17 11a3 3 0 0 0 0-6"/><path d="M20 20v-1.5a4 4 0 0 0-2.8-3.8"/></svg></div>
                 <div class="sg-stat-copy"><div class="sg-stat-label">Total Students</div><div class="sg-stat-value"><?= number_format($totalStudents) ?></div><div class="sg-stat-sub">Total Registered Students</div></div>
             </article>
             <article class="sg-dashboard-card sg-stat-card stat-green">
-                <div class="sg-stat-icon"><i class="bi bi-person-plus-fill"></i></div>
+                <div class="sg-kpi-icon sg-kpi-icon-green" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 20v-1.5A4.5 4.5 0 0 1 8 14h2"/><path d="M16 8v6M13 11h6"/></svg></div>
                 <div class="sg-stat-copy"><div class="sg-stat-label" id="kpiUniqueLabel">Students Entered Today</div><div class="sg-stat-value" id="kpiUniqueValue"><?= number_format($uniqueStudentsToday) ?><span class="sg-stat-denom"> / <?= number_format($totalStudents) ?></span></div><div class="sg-stat-sub">Unique Students</div></div>
             </article>
             <article class="sg-dashboard-card sg-stat-card stat-purple">
-                <div class="sg-stat-icon"><i class="bi bi-people-fill"></i></div>
+                <div class="sg-kpi-icon sg-kpi-icon-purple" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4V20"/><circle cx="10" cy="7" r="3"/><path d="M17 11a3 3 0 0 0 0-6"/><path d="M20 20v-1.5a4 4 0 0 0-2.8-3.8"/></svg></div>
                 <div class="sg-stat-copy"><div class="sg-stat-label" id="kpiGrantedLabel">Today's Entries</div><div class="sg-stat-value" id="kpiGrantedValue"><?= number_format($todayEntries) ?></div><div class="sg-stat-sub">Successful Entry Scans</div></div>
             </article>
             <article class="sg-dashboard-card sg-stat-card stat-red">
-                <div class="sg-stat-icon"><i class="bi bi-slash-circle"></i></div>
+                <div class="sg-kpi-icon sg-kpi-icon-red" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg></div>
                 <div class="sg-stat-copy"><div class="sg-stat-label" id="kpiDeniedLabel">Today's Denied</div><div class="sg-stat-value" id="kpiDeniedValue"><?= number_format($deniedEntries) ?></div><div class="sg-stat-sub">Access Denied Attempts</div></div>
             </article>
         </section>

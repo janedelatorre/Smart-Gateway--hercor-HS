@@ -142,7 +142,9 @@ require_once __DIR__ . '/../includes/header.php';
     window.SG_INITIAL_FACE_GATE = {
         unlocked: <?= $initialFaceGateUnlocked ? 'true' : 'false' ?>,
         remaining: <?= (int) $initialFaceGateRemaining ?>,
-        threshold: <?= (int) get_facial_fallback_threshold($pdo) ?>
+        threshold: <?= (int) get_facial_fallback_threshold($pdo) ?>,
+        faceAttempts: <?= (int) get_face_fail_count() ?>,
+        faceMaxAttempts: <?= (int) SG_FACE_MAX_ATTEMPTS ?>
     };
 </script>
 <script>

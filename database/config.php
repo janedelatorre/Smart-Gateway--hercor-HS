@@ -61,7 +61,7 @@ $sgLocalDb = [
 // =====================================================================
 $sgProductionDb = [
     'host'    => 'localhost',                  // usually still 'localhost' even on shared hosting
-    'name'    => 'u483372788_Smart_gateway',          // e.g. u123456_smartgatewayproject_dev
+    'name'    => 'u483372788_Smart_gateway',          // e.g. u123456_smart_gateway
     'user'    => 'u483372788_smartgateway',          // e.g. u123456_sguser
     'pass'    => 'Janelyn@18',
 ];

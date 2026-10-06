@@ -363,6 +363,29 @@ function register_barcode_failure(): int {
 /** Reset the streak — called after ANY successful verification (barcode or face). */
 function reset_barcode_fail_streak(): void {
     $_SESSION['barcode_fail_streak'] = 0;
+    // The facial-attempt counter belongs to ONE unlocked fallback window, so it
+    // always starts again from 0 whenever the barcode streak is reset (success,
+    // or facial lockout -- see api/face.php).
+    unset($_SESSION['face_fail_count'], $_SESSION['face_last_attempt_at']);
+}
+
+// ---------------------------------------------------------------------
+// FACIAL VERIFICATION ATTEMPT LIMIT (per unlocked fallback window)
+// ---------------------------------------------------------------------
+// Only a face that was DETECTED and actually compared against the registered
+// facial data, and did not match, is counted (api/face.php 'no_match').
+// "No face in frame" never reaches the server, so it can never be counted.
+const SG_FACE_MAX_ATTEMPTS = 3;               // failed facial verifications before facial fallback locks again
+const SG_FACE_MIN_ATTEMPT_INTERVAL = 2.0;     // seconds -- server-side debounce between two facial attempts
+
+function get_face_fail_count(): int {
+    return (int) ($_SESSION['face_fail_count'] ?? 0);
+}
+
+/** Record one actual facial verification failure. Returns the new count. */
+function register_face_failure(): int {
+    $_SESSION['face_fail_count'] = get_face_fail_count() + 1;
+    return (int) $_SESSION['face_fail_count'];
 }
 
 function get_barcode_fail_streak(): int {
