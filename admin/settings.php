@@ -81,8 +81,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('sms_api_key', ?) ON DUPLICATE KEY UPDATE setting_value = ?")
                     ->execute([$newKey, $newKey]);
             }
-            log_activity($pdo, 'Settings Updated', 'SMS provider settings updated');
+            // Active provider: only the two known values are accepted.
+            $prov = $_POST['sms_active_provider'] ?? '';
+            if (in_array($prov, ['iprog', 'semaphore'], true)) {
+                $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('sms_active_provider', ?) ON DUPLICATE KEY UPDATE setting_value = ?")
+                    ->execute([$prov, $prov]);
+            }
+            $semSender = trim($_POST['semaphore_sender_name'] ?? '');
+            $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('semaphore_sender_name', ?) ON DUPLICATE KEY UPDATE setting_value = ?")
+                ->execute([$semSender, $semSender]);
+            $semKey = trim($_POST['semaphore_api_key'] ?? '');
+            if ($semKey !== '') {
+                $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('semaphore_api_key', ?) ON DUPLICATE KEY UPDATE setting_value = ?")
+                    ->execute([$semKey, $semKey]);
+            }
+            log_activity($pdo, 'Settings Updated', 'SMS provider settings updated (active provider: ' . ($prov ?: 'unchanged') . ')');
             $message = '<div class="alert alert-success">SMS provider settings saved successfully.</div>';
+        } elseif ($form === 'sms_test') {
+            // Manual, admin-initiated only. Uses the currently active provider; not written to sms_logs.
+            require_once __DIR__ . '/../api/sms.php';
+            $to = trim($_POST['test_number'] ?? '');
+            $prov = sg_get_active_sms_provider($pdo);
+            if (!sg_is_valid_ph_mobile($to)) {
+                $message = '<div class="alert alert-warning">Enter a valid mobile number (09XXXXXXXXX).</div>';
+            } else {
+                $r = sg_send_sms($pdo, $to, 'Smart Gateway test message.', $_SESSION['username'] ?? 'Administrator');
+                log_activity($pdo, 'SMS Test', "Test SMS via {$prov}: {$r['status']}");
+                $cls = $r['status'] === 'Match' ? 'success' : 'danger';
+                $message = '<div class="alert alert-' . $cls . '"><strong>' . e(SG_SMS_PROVIDERS[$prov]) . ':</strong> ' . e($r['status']) . ' — ' . e($r['response']) . '</div>';
+            }
         } elseif ($form === 'kiosk_revoke') {
             $message = kiosk_revoke($pdo, (int) ($_POST['kiosk_id'] ?? 0), $_SESSION['username'] ?? 'Administrator')
                 ? '<div class="alert alert-success">Kiosk station locked.</div>'
@@ -350,6 +377,16 @@ require_once __DIR__ . '/../includes/header.php';
                     <form method="POST">
                         <input type="hidden" name="csrf_token" value="<?= e($csrf) ?>">
                         <input type="hidden" name="form" value="sms">
+                        <?php require_once __DIR__ . '/../api/sms.php'; $activeProv = sg_get_active_sms_provider($pdo); ?>
+                        <div class="mb-3">
+                            <label class="form-label">Active SMS Provider</label>
+                            <select name="sms_active_provider" class="form-select">
+                                <option value="iprog" <?= $activeProv==='iprog'?'selected':'' ?>>iProg</option>
+                                <option value="semaphore" <?= $activeProv==='semaphore'?'selected':'' ?>>Semaphore</option>
+                            </select>
+                            <small class="text-muted">Currently active: <strong><?= e(SG_SMS_PROVIDERS[$activeProv]) ?></strong>. All SMS (entry alerts, OTP, resend) is sent through this provider only; there is no automatic fallback.</small>
+                        </div>
+                        <h6 class="fw-bold mt-4">iProg</h6>
                         <div class="mb-3">
                             <label class="form-label">SMS API URL</label>
                             <input type="text" name="sms_api_url" class="form-control" placeholder="https://your-sms-provider.com/api/send" value="<?= e($get('sms_api_url')) ?>">
@@ -364,7 +401,29 @@ require_once __DIR__ . '/../includes/header.php';
                             <label class="form-label">Sender ID</label>
                             <input type="text" name="sms_sender_id" class="form-control" value="<?= e($get('sms_sender_id','SmartGateway')) ?>">
                         </div>
+                        <h6 class="fw-bold mt-4">Semaphore</h6>
+                        <div class="mb-3">
+                            <label class="form-label">Semaphore API Key</label>
+                            <input type="password" name="semaphore_api_key" class="form-control" autocomplete="off"
+                                   placeholder="<?= $get('semaphore_api_key') !== '' ? 'Key on file — leave blank to keep it unchanged' : 'Your Semaphore API key' ?>" value="">
+                            <small class="text-muted">Never shown after saving. Leave blank to keep the current key.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Semaphore Sender Name (approved)</label>
+                            <input type="text" name="semaphore_sender_name" class="form-control" maxlength="11" value="<?= e($get('semaphore_sender_name')) ?>">
+                            <small class="text-muted">Must be the Sender Name already approved on your Semaphore account.</small>
+                        </div>
                         <button type="submit" class="btn btn-sg-primary">Save Changes</button>
+                    </form>
+                    <hr>
+                    <form method="POST" class="row g-2 align-items-end">
+                        <input type="hidden" name="csrf_token" value="<?= e($csrf) ?>">
+                        <input type="hidden" name="form" value="sms_test">
+                        <div class="col-auto">
+                            <label class="form-label">Test SMS via <?= e(SG_SMS_PROVIDERS[$activeProv]) ?></label>
+                            <input type="text" name="test_number" class="form-control" placeholder="09XXXXXXXXX" required>
+                        </div>
+                        <div class="col-auto"><button type="submit" class="btn btn-outline-secondary" onclick="return confirm('Send a real test SMS (uses provider credits)?')">Send Test SMS</button></div>
                     </form>
                 </div>
             </div>

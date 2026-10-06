@@ -65,7 +65,6 @@ $sgProductionDb = [
     'user'    => 'u483372788_smartgateway',          // e.g. u123456_sguser
     'pass'    => 'Janelyn@18',
 ];
-
 $sgDbConfig = $sgIsLocalEnv ? $sgLocalDb : $sgProductionDb;
 
 define('APP_ENV', $sgIsLocalEnv ? 'local' : 'production');

@@ -133,6 +133,27 @@ automatically after every granted entry. It is provider-agnostic:
 3. Until configured, messages are logged with status **Pending** so the rest of the
    system (dashboard stats, entry flow, etc.) can still be demonstrated end-to-end.
 
+### Switchable SMS providers (iProg / Semaphore)
+
+Supported providers: **iProg** (default, unchanged) and **Semaphore**
+(`POST https://api.semaphore.co/api/v4/messages`). `sg_send_sms()` is the single
+entry point; it routes to the one active provider. There is **no automatic fallback**.
+
+| Provider  | Configured at | Values |
+|-----------|---------------|--------|
+| iProg     | Settings → SMS Provider | SMS API URL, SMS API Key (existing) |
+| Semaphore | Settings → SMS Provider | Semaphore API Key, **approved** Sender Name |
+
+Semaphore values may alternatively come from environment variables
+`SG_SEMAPHORE_API_KEY` / `SG_SEMAPHORE_SENDER_NAME` (used only if the setting is empty).
+
+**Switch provider:** Administrator → Settings → SMS Provider → *Active SMS Provider* → Save.
+No code edit needed. The same page has a manual **Send Test SMS** button (uses the active provider and real credits; never sent automatically).
+
+Requirements for Semaphore: a valid API key and a Sender Name already approved by Semaphore (do not invent one).
+
+> **Warning:** API keys are stored server-side only and are never rendered to the browser or logged. Never paste keys into JavaScript, HTML, or commit them to version control.
+
 ---
 
 ## 7. Facial Recognition Notes

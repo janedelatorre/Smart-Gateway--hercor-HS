@@ -4,8 +4,8 @@
 -- Using Barcode Verification, Backup Facial Recognition & SMS Notification
 -- =====================================================================
 
-CREATE DATABASE IF NOT EXISTS smartgatewayproject_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE smartgatewayproject_dev;
+CREATE DATABASE IF NOT EXISTS u483372788_HercorStudent CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE u483372788_HercorStudent;
 
 -- ---------------------------------------------------------------------
 -- Table: users  (Admin / Staff accounts)

@@ -110,9 +110,6 @@ if (basename($_SERVER['SCRIPT_FILENAME']) === basename(__FILE__) && !defined('SG
  * retrying automatically once connectivity to the provider comes back.
  */
 function sg_send_sms(PDO $pdo, string $recipient, string $message, string $sentBy = 'System'): array {
-    $apiUrl = get_setting($pdo, 'sms_api_url', '');
-    $apiKey = get_setting($pdo, 'sms_api_key', '');
-    $senderId = get_setting($pdo, 'sms_sender_id', 'SmartGateway'); // not sent to IPROG (see below) -- kept so the Settings > SMS page field stays meaningful if a future provider uses it
     $smsEnabled = get_setting($pdo, 'enable_sms', '1');
 
     if ($smsEnabled !== '1') {
@@ -125,6 +122,112 @@ function sg_send_sms(PDO $pdo, string $recipient, string $message, string $sentB
     if (!sg_is_valid_ph_mobile($recipient)) {
         return ['status' => 'Denied', 'response' => 'Invalid recipient number format (expected 09XXXXXXXXX).'];
     }
+
+    // Single routing point: every SMS (entry notifications, OTP, resend,
+    // queue flush) comes through here and is dispatched to the ONE active
+    // provider. No automatic fallback to the other provider.
+    if (sg_get_active_sms_provider($pdo) === 'semaphore') {
+        return sg_send_sms_semaphore($pdo, $recipient, $message);
+    }
+    return sg_send_sms_iprog($pdo, $recipient, $message);
+}
+
+const SG_SMS_PROVIDERS = ['iprog' => 'iProg', 'semaphore' => 'Semaphore'];
+
+/** Active provider: settings key sms_active_provider; anything unknown/missing => iprog (existing behavior). */
+function sg_get_active_sms_provider(PDO $pdo): string {
+    $p = strtolower(trim((string) get_setting($pdo, 'sms_active_provider', 'iprog')));
+    return isset(SG_SMS_PROVIDERS[$p]) ? $p : 'iprog';
+}
+
+/** Semaphore config: DB setting first, then environment variable fallback. Server-side only. */
+function sg_semaphore_config(PDO $pdo): array {
+    $key = trim((string) get_setting($pdo, 'semaphore_api_key', ''));
+    if ($key === '') $key = trim((string) getenv('SG_SEMAPHORE_API_KEY'));
+    $sender = trim((string) get_setting($pdo, 'semaphore_sender_name', ''));
+    if ($sender === '') $sender = trim((string) getenv('SG_SEMAPHORE_SENDER_NAME'));
+    return ['api_key' => $key, 'sender_name' => $sender];
+}
+
+/** Remove any secret from text before it is returned/logged/stored. */
+function sg_redact_secret(string $text, array $secrets): string {
+    foreach ($secrets as $secret) {
+        if ($secret !== '') $text = str_replace($secret, '[REDACTED]', $text);
+    }
+    return $text;
+}
+
+/** Build the Semaphore POST fields (separate function so the request can be verified without a network call). */
+function sg_build_semaphore_request(string $apiKey, string $senderName, string $recipient, string $message): array {
+    return [
+        'url'    => 'https://api.semaphore.co/api/v4/messages',
+        'fields' => [
+            'apikey'     => $apiKey,
+            'number'     => $recipient, // canonical 09XXXXXXXXX is accepted by Semaphore as-is
+            'message'    => $message,
+            'sendername' => $senderName,
+        ],
+    ];
+}
+
+function sg_send_sms_semaphore(PDO $pdo, string $recipient, string $message): array {
+    $cfg = sg_semaphore_config($pdo);
+    if ($cfg['api_key'] === '' || $cfg['sender_name'] === '') {
+        return ['status' => 'Pending', 'response' => 'Semaphore: API key and/or approved Sender Name not configured (Settings > SMS Provider).'];
+    }
+    if (!function_exists('curl_init')) {
+        return ['status' => 'Denied', 'response' => 'PHP cURL extension is not enabled on this server.'];
+    }
+    $req = sg_build_semaphore_request($cfg['api_key'], $cfg['sender_name'], $recipient, $message);
+
+    $ch = curl_init($req['url']);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query($req['fields']),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => true,
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    $curlErrno = curl_errno($ch);
+    curl_close($ch);
+
+    if ($curlError) {
+        $err = sg_redact_secret($curlError, [$cfg['api_key']]);
+        error_log('SMS provider=semaphore connectivity error: ' . $err);
+        return ['status' => 'Queued', 'response' => "Semaphore connectivity error (retryable): $err", 'curl_errno' => $curlErrno];
+    }
+    $result = sg_classify_semaphore_response($httpCode, (string) $response, [$cfg['api_key']]);
+    if ($result['status'] === 'Denied') {
+        error_log('SMS provider=semaphore failed: ' . $result['response']);
+    }
+    return $result;
+}
+
+/**
+ * Classify a Semaphore response. Success = HTTP 2xx and a JSON array of message
+ * objects (each with message_id). "Match" means accepted by Semaphore, not
+ * confirmed handset delivery. Anything else is a provider rejection (Denied).
+ */
+function sg_classify_semaphore_response(int $httpCode, string $raw, array $secrets = []): array {
+    $decoded = json_decode($raw, true);
+    if ($httpCode >= 200 && $httpCode < 300 && is_array($decoded) && isset($decoded[0]) && is_array($decoded[0]) && !empty($decoded[0]['message_id'])) {
+        $first = $decoded[0];
+        $st = strtolower((string) ($first['status'] ?? ''));
+        if ($st === 'failed' || $st === 'refused') {
+            return ['status' => 'Denied', 'response' => 'Semaphore: message ' . $st];
+        }
+        return ['status' => 'Match', 'response' => 'Semaphore: accepted (' . ($first['status'] ?? 'Queued') . ')', 'message_id' => (string) $first['message_id']];
+    }
+    $detail = sg_redact_secret(mb_substr($raw, 0, 300), $secrets);
+    return ['status' => 'Denied', 'response' => "Semaphore: HTTP $httpCode: $detail"];
+}
+
+function sg_send_sms_iprog(PDO $pdo, string $recipient, string $message): array {
+    $apiUrl = get_setting($pdo, 'sms_api_url', '');
+    $apiKey = get_setting($pdo, 'sms_api_key', '');
 
     if ($apiUrl === '' || $apiKey === '') {
         // No provider configured yet — log message so the workflow can be demoed end-to-end.
