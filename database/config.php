@@ -61,9 +61,9 @@ $sgLocalDb = [
 // =====================================================================
 $sgProductionDb = [
     'host'    => 'localhost',                  // usually still 'localhost' even on shared hosting
-    'name'    => 'CHANGE_ME_db_name',          // e.g. u123456_smart_gateway
-    'user'    => 'CHANGE_ME_db_user',          // e.g. u123456_sguser
-    'pass'    => 'CHANGE_ME_db_password',
+    'name'    => 'u483372788_Smart_gateway',          // e.g. u123456_smart_gateway
+    'user'    => 'u483372788_smartgateway',          // e.g. u123456_sguser
+    'pass'    => 'Janelyn@18',
 ];
 
 $sgDbConfig = $sgIsLocalEnv ? $sgLocalDb : $sgProductionDb;
