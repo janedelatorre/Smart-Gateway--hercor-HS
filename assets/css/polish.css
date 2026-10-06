@@ -335,3 +335,260 @@ html[data-theme="light"] .sg-settings-category-btn.active {
   .sg-settings-category-btn { font-size:10.5px; }
   .sg-account-shortcuts .btn { flex-basis:100%; }
 }
+
+/* =====================================================================
+   V22.1 — Cross-device shell, settings launcher, KPI icons, profile menu
+   ===================================================================== */
+
+/* The previous rule combined margin-left:208px with width:100%, which made
+   the content 208px wider than the viewport on desktop. Keep the content
+   width mathematically tied to the sidebar and remove that overflow source. */
+.sg-content,
+.sg-dashboard-content {
+  margin-left:208px !important;
+  width:calc(100% - 208px) !important;
+  max-width:calc(100% - 208px) !important;
+  min-width:0 !important;
+  overflow-x:clip;
+}
+.sg-main,
+.sg-dashboard-main {
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  overflow-x:clip;
+}
+.sg-main > .row,
+.sg-main > .row.g-3,
+.sg-main > .d-flex,
+.sg-main > .sg-card {
+  max-width:100% !important;
+  min-width:0 !important;
+}
+.sg-main .row > [class*="col-"] { min-width:0 !important; }
+
+/* Settings launcher: compact desktop width instead of six full-width tiles. */
+.sg-settings-category-nav {
+  width:100%;
+  max-width:980px;
+  grid-template-columns:repeat(6,minmax(105px,145px)) !important;
+  justify-content:start;
+  gap:10px;
+  margin:0 0 16px;
+}
+.sg-settings-category-btn {
+  position:relative;
+  min-height:68px !important;
+  padding:10px 8px !important;
+  border-width:1px !important;
+  border-style:solid !important;
+  background:linear-gradient(180deg,rgba(9,48,69,.86),rgba(5,31,47,.86)) !important;
+  color:#cfe3eb !important;
+  box-shadow:0 3px 10px rgba(0,0,0,.08);
+  overflow:hidden;
+}
+.sg-settings-category-btn::before {
+  content:"";
+  position:absolute;
+  inset:0 0 auto;
+  height:3px;
+  background:transparent;
+  transition:background .18s ease;
+}
+.sg-settings-category-btn i {
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:9px;
+  background:rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.08);
+  color:#9bb8c6;
+  font-size:17px;
+}
+.sg-settings-category-btn:hover {
+  transform:none;
+  border-color:rgba(33,214,239,.55) !important;
+  background:linear-gradient(180deg,rgba(11,61,84,.94),rgba(6,37,55,.94)) !important;
+  color:#f2fcff !important;
+}
+.sg-settings-category-btn.active {
+  background:linear-gradient(180deg,rgba(11,111,139,.40),rgba(7,67,88,.46)) !important;
+  border:2px solid #27d7ef !important;
+  color:#ecfdff !important;
+  box-shadow:0 0 0 2px rgba(39,215,239,.10),0 8px 20px rgba(0,0,0,.16) !important;
+  transform:none;
+}
+.sg-settings-category-btn.active::before { background:#27d7ef; }
+.sg-settings-category-btn.active i {
+  color:#071f2c;
+  background:#27d7ef;
+  border-color:#27d7ef;
+  box-shadow:0 0 0 3px rgba(39,215,239,.12);
+}
+.sg-settings-category-btn.active::after {
+  content:"✓";
+  position:absolute;
+  top:7px;
+  right:7px;
+  width:17px;
+  height:17px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#27d7ef;
+  color:#052536;
+  font-size:10px;
+  font-weight:900;
+}
+html[data-theme="light"] .sg-settings-category-btn {
+  background:#fff !important;
+  color:#415166 !important;
+  border-color:#d2dce6 !important;
+}
+html[data-theme="light"] .sg-settings-category-btn i {
+  background:#f2f6f9;
+  border-color:#dbe4ec;
+  color:#607286;
+}
+html[data-theme="light"] .sg-settings-category-btn.active {
+  background:#eafafd !important;
+  color:#075e74 !important;
+  border-color:#079ab8 !important;
+  box-shadow:0 0 0 2px rgba(7,154,184,.10),0 7px 16px rgba(31,75,95,.10) !important;
+}
+html[data-theme="light"] .sg-settings-category-btn.active i {
+  background:#079ab8;
+  color:#fff;
+  border-color:#079ab8;
+}
+.sg-settings-panels { width:100%; max-width:980px; }
+.sg-settings-panel { width:100%; max-width:980px; }
+.sg-settings-panel > .sg-card { width:100%; max-width:980px; }
+
+/* Analytics KPI icons are inline SVGs, so they no longer depend on a font
+   glyph being available/rendered correctly. */
+.sg-analytics-kpi .sg-kpi-icon {
+  width:42px;
+  height:42px;
+  min-width:42px;
+  flex:0 0 42px;
+  display:grid;
+  place-items:center;
+  border-radius:11px;
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 5px 14px rgba(0,0,0,.12);
+}
+.sg-analytics-kpi .sg-kpi-icon svg { width:22px; height:22px; display:block; }
+.sg-kpi-icon-cyan { color:#52e4f5; background:rgba(25,201,232,.16); border-color:rgba(25,201,232,.34) !important; }
+.sg-kpi-icon-green { color:#5ee7a0; background:rgba(34,197,94,.15); border-color:rgba(34,197,94,.32) !important; }
+.sg-kpi-icon-red { color:#ff8793; background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.32) !important; }
+.sg-kpi-icon-purple { color:#c3a4ff; background:rgba(139,92,246,.16); border-color:rgba(139,92,246,.34) !important; }
+.sg-kpi-copy { min-width:0; overflow:hidden; }
+.sg-kpi-copy .stat-value,
+.sg-kpi-copy .stat-label { overflow-wrap:anywhere; }
+html[data-theme="light"] .sg-analytics-kpi .sg-kpi-icon { box-shadow:inset 0 1px 0 rgba(255,255,255,.85),0 4px 12px rgba(25,50,75,.08); }
+
+/* Profile dropdown: keep it inside the viewport at every breakpoint. */
+.sg-profile-menu {
+  width:250px;
+  min-width:230px !important;
+  max-width:calc(100vw - 16px) !important;
+  margin-top:6px !important;
+  overflow:hidden;
+}
+.sg-profile-menu .dropdown-item { min-height:42px; display:flex; align-items:center; gap:2px; }
+
+/* Tablet / phone: remove the sidebar width from the content calculation. */
+@media (max-width:991.98px) {
+  .sg-content,
+  .sg-dashboard-content {
+    margin-left:0 !important;
+    width:100% !important;
+    max-width:100% !important;
+  }
+  .sg-settings-category-nav,
+  .sg-settings-panels,
+  .sg-settings-panel,
+  .sg-settings-panel > .sg-card { max-width:100%; }
+  .sg-settings-category-nav { grid-template-columns:repeat(3,minmax(0,145px)) !important; }
+}
+@media (max-width:575.98px) {
+  .sg-main { padding-left:8px !important; padding-right:8px !important; }
+  .sg-settings-category-nav { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:8px; }
+  .sg-settings-category-btn { min-height:62px !important; }
+  .sg-settings-category-btn i { width:31px; height:31px; font-size:16px; }
+  .sg-analytics-kpi { gap:8px !important; }
+  .sg-analytics-kpi .sg-kpi-icon { width:36px; height:36px; min-width:36px; flex-basis:36px; }
+  .sg-analytics-kpi .sg-kpi-icon svg { width:19px; height:19px; }
+  .sg-profile-menu { width:min(250px,calc(100vw - 16px)); }
+}
+
+/* =====================================================================
+   Formal A4 PDF / print report — no dashboard cards or UI containers.
+   ===================================================================== */
+@media print {
+  @page { size:A4 portrait; margin:9mm 9mm 10mm; }
+  html, body { background:#fff !important; color:#18212b !important; font-size:10.5px !important; }
+  .sg-report-document { width:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+  .sg-report-document * { box-shadow:none !important; }
+  .sg-report-cover {
+    padding:0 0 8mm !important;
+    margin:0 0 6mm !important;
+    background:#fff !important;
+    border:0 !important;
+    border-bottom:2px solid #173f55 !important;
+    border-radius:0 !important;
+  }
+  .sg-report-brand-line { gap:9px !important; }
+  .sg-report-logo { width:40px !important; height:40px !important; flex-basis:40px !important; border:0 !important; }
+  .sg-report-brand-line h2 { font-size:13px !important; color:#173f55 !important; }
+  .sg-report-brand-line p { font-size:9px !important; color:#526273 !important; }
+  .sg-report-cover-title { margin-top:8mm !important; padding-top:3mm !important; border-top:1px solid #c8d1d8 !important; }
+  .sg-report-cover-title span { font-size:8px !important; color:#526273 !important; letter-spacing:.14em !important; }
+  .sg-report-cover-title h1 { font-size:21px !important; color:#132c3d !important; margin:2mm 0 1mm !important; }
+  .sg-report-cover-title p { font-size:9.5px !important; color:#526273 !important; }
+
+  .sg-report-summary,
+  .sg-report-document .sg-card,
+  .sg-report-document .sg-report-summary {
+    background:transparent !important;
+    border:0 !important;
+    border-radius:0 !important;
+    padding:0 !important;
+    margin:0 0 5mm !important;
+  }
+  .sg-report-summary .sg-card-heading { border-bottom:1px solid #b9c5ce; padding-bottom:1.5mm; margin-bottom:2mm !important; }
+  .sg-report-summary p { font-size:10.5px !important; line-height:1.55 !important; color:#283745 !important; }
+  .sg-report-meta { border:0 !important; padding:2mm 0 0 !important; margin:0 !important; font-size:8.5px !important; }
+
+  .sg-report-document .row { margin-left:-3mm !important; margin-right:-3mm !important; }
+  .sg-report-document .row > [class*="col-"] { padding-left:3mm !important; padding-right:3mm !important; }
+  .sg-report-document .sg-report-kpi {
+    min-height:0 !important;
+    padding:2.5mm 0 !important;
+    border-top:1px solid #d5dde3 !important;
+    border-bottom:1px solid #d5dde3 !important;
+    display:flex !important;
+    align-items:center !important;
+    gap:2.5mm !important;
+  }
+  .sg-report-document .sg-report-kpi .icon-box { display:none !important; }
+  .sg-report-document .sg-report-kpi .stat-value { font-size:14px !important; color:#142330 !important; }
+  .sg-report-document .sg-report-kpi .stat-label { font-size:8px !important; color:#5c6b78 !important; }
+  .sg-report-document .sg-card-heading { padding-bottom:1.5mm !important; margin-bottom:2mm !important; border-bottom:1px solid #b9c5ce !important; }
+  .sg-report-document .sg-card-heading h2 { font-size:11px !important; color:#173f55 !important; }
+  .sg-report-document .sg-card-heading h2 i { display:none !important; }
+  .sg-report-document .sg-report-note { font-size:8px !important; color:#657483 !important; }
+  .sg-report-document .sg-report-chart-wrap { height:48mm !important; min-height:48mm !important; }
+  .sg-report-document .sg-report-chart-tall { height:52mm !important; }
+  .sg-report-document .sg-report-method-wrap { height:43mm !important; min-height:43mm !important; }
+  .sg-report-document .sg-report-table { font-size:9px !important; }
+  .sg-report-document .sg-report-table th { background:#f1f4f6 !important; color:#435361 !important; font-size:8px !important; padding:1.5mm 2mm !important; }
+  .sg-report-document .sg-report-table td { color:#263744 !important; padding:1.6mm 2mm !important; border-color:#d9e0e5 !important; }
+  .sg-report-footer { margin-top:3mm !important; padding-top:2mm !important; border-top:1px solid #b9c5ce !important; font-size:7.5px !important; color:#657483 !important; }
+  .sg-report-document .sg-card,
+  .sg-report-document .sg-report-summary,
+  .sg-report-document .sg-report-kpi,
+  .sg-report-document .row { break-inside:avoid; }
+}

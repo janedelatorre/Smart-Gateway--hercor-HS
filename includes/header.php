@@ -4,6 +4,12 @@
  * Expects optional $pageTitle variable to be set before including this file.
  */
 $pageTitle = $pageTitle ?? 'Smart Gateway';
+$seoIndexable = $seoIndexable ?? false;
+$seoDescription = $seoDescription ?? 'Secure campus entry verification for Hercor College High School Department using barcode and facial recognition.';
+$seoCanonical = $seoCanonical ?? (defined('SG_CANONICAL_BASE_URL') ? SG_CANONICAL_BASE_URL . '/' : (defined('APP_URL') ? APP_URL . '/' : '/'));
+$seoImage = $seoImage ?? (defined('SG_CANONICAL_BASE_URL') ? SG_CANONICAL_BASE_URL . '/web-app-manifest-512x512.png' : '');
+$seoRobots = $seoIndexable ? 'index, follow' : 'noindex, nofollow, noarchive, nosnippet';
+$seoOgType = $seoOgType ?? 'website';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -12,6 +18,21 @@ $pageTitle = $pageTitle ?? 'Smart Gateway';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= e($pageTitle) ?> | Smart Gateway</title>
+<meta name="description" content="<?= e($seoDescription) ?>">
+<meta name="robots" content="<?= e($seoRobots) ?>">
+<?php if ($seoIndexable): ?>
+<link rel="canonical" href="<?= e($seoCanonical) ?>">
+<meta property="og:type" content="<?= e($seoOgType) ?>">
+<meta property="og:site_name" content="Smart Gateway — Hercor College High School Department">
+<meta property="og:title" content="<?= e($pageTitle) ?>">
+<meta property="og:description" content="<?= e($seoDescription) ?>">
+<meta property="og:url" content="<?= e($seoCanonical) ?>">
+<meta property="og:image" content="<?= e($seoImage) ?>">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="<?= e($pageTitle) ?>">
+<meta name="twitter:description" content="<?= e($seoDescription) ?>">
+<meta name="twitter:image" content="<?= e($seoImage) ?>">
+<?php endif; ?>
 
 <!-- Inter font (self-hosted — Phase 2, was Google Fonts) -->
 <link href="<?= APP_URL ?>/assets/fonts/inter/inter.css" rel="stylesheet">

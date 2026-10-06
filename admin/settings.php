@@ -281,9 +281,7 @@ require_once __DIR__ . '/../includes/header.php';
                     </form>
                 </div>
 
-        </section>
-        <section class="sg-settings-panel" data-settings-category="kiosk-station" aria-label="Kiosk Station settings">
-                <div class="sg-card mb-3">
+        <div class="sg-card mt-3">
                     <h5 class="fw-bold mb-3">Kiosk Station</h5>
                     <p class="text-muted small mb-3">Manage authorized scanner stations. Kiosk timeout remains separate from the Admin/Staff session timeout above.</p>
                     <div class="table-responsive">
@@ -318,8 +316,9 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
                 </div>
 
-        </section>
-        <section class="sg-settings-panel" data-settings-category="scanner" aria-label="Scanner settings">
+                </section>
+
+                <section class="sg-settings-panel" data-settings-category="scanner" aria-label="Scanner settings">
                 <div class="sg-card mb-3">
                     <h5 class="fw-bold mb-3">Scanner &amp; Access Settings</h5>
                     <form method="POST">

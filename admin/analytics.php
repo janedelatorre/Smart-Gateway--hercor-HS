@@ -42,8 +42,25 @@ $pageTitle='Analytics';$pageHeading='Analytics';$pageSubheading='Campus entry pe
 <div class="sg-card mb-3 sg-no-print"><form method="GET" class="row g-3 align-items-end"><div class="col-sm-6 col-lg-3"><label class="form-label">From Date</label><div class="sg-date-field"><input type="date" name="from" value="<?=e($dateFrom)?>" class="form-control"></div></div><div class="col-sm-6 col-lg-3"><label class="form-label">End Date</label><div class="sg-date-field"><input type="date" name="to" value="<?=e($dateTo)?>" class="form-control"></div></div><div class="col-sm-6 col-lg-2"><button class="btn btn-sg-primary w-100" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Refresh Analytics</button></div></form></div>
 
 <div class="row g-3 mb-3">
-<?php $kpis=[['Total Scans',$total,'bi-activity','blue'],['Granted',$granted,'bi-check2-circle','green'],['Denied',$denied,'bi-x-octagon','red'],['Unique Students',$unique,'bi-people','purple'],['Grant Rate',$successRate.'%','bi-percent','green'],['Denied Rate',$deniedRate.'%','bi-shield-x','red'],['Avg / Day',$avgDaily,'bi-calendar3','blue'],['Scans / Student',$scansPerStudent,'bi-person-check-fill','purple']];foreach($kpis as $k):?><div class="col-6 col-md-4 col-xl"><div class="sg-card sg-analytics-kpi"><div class="icon-box bg-icon-<?=$k[3]?>"><i class="bi <?=$k[2]?>"></i></div><div><div class="stat-value"><?=e((string)$k[1])?></div><div class="stat-label"><?=e($k[0])?></div></div></div></div><?php endforeach; ?>
-</div>
+<?php
+$kpis=[
+ ['Total Scans',$total,'activity','cyan'],['Granted',$granted,'check','green'],['Denied',$denied,'x','red'],
+ ['Unique Students',$unique,'users','purple'],['Grant Rate',$successRate.'%','percent','green'],['Denied Rate',$deniedRate.'%','shield','red'],
+ ['Avg / Day',$avgDaily,'calendar','cyan'],['Scans / Student',$scansPerStudent,'person-check','purple']
+];
+$kpiSvg=[
+ 'activity'=>'<polyline points="3,12 7,12 9.5,5 13,19 16,10 19,12 21,12"/>',
+ 'check'=>'<path d="M5 12.5l4 4L19 7"/>',
+ 'x'=>'<path d="M7 7l10 10M17 7L7 17"/>',
+ 'users'=>'<path d="M16 20v-1.5a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4V20"/><circle cx="10" cy="7" r="3"/><path d="M17 11a3 3 0 0 0 0-6"/><path d="M20 20v-1.5a4 4 0 0 0-2.8-3.8"/>',
+ 'percent'=>'<line x1="7" y1="17" x2="17" y2="7"/><circle cx="8" cy="8" r="1.5"/><circle cx="16" cy="16" r="1.5"/>',
+ 'shield'=>'<path d="M12 3l7 3v5c0 4.5-2.9 8-7 10-4.1-2-7-5.5-7-10V6l7-3z"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/>',
+ 'calendar'=>'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="M8 14h.01M12 14h.01M16 14h.01"/>',
+ 'person-check'=>'<circle cx="9" cy="8" r="3"/><path d="M3.5 20v-1.5A4.5 4.5 0 0 1 8 14h2"/><path d="M14 17l2 2 4-5"/>'
+];
+foreach($kpis as $k):?>
+<div class="col-6 col-md-4 col-xl"><div class="sg-card sg-analytics-kpi"><div class="sg-kpi-icon sg-kpi-icon-<?=$k[3]?>" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><?=$kpiSvg[$k[2]]?></svg></div><div class="sg-kpi-copy"><div class="stat-value"><?=e((string)$k[1])?></div><div class="stat-label"><?=e($k[0])?></div></div></div></div>
+<?php endforeach; ?></div>
 
 <div class="row g-3 mb-3"><div class="col-lg-8"><div class="sg-card"><div class="sg-card-heading"><h2><i class="bi bi-graph-up"></i> Daily Activity Trend</h2><span class="sg-report-note">Peak day: <?=e($peakDay)?></span></div><div class="sg-analytics-chart-wrap sg-analytics-chart-tall"><canvas id="dailyAnalyticsChart"></canvas></div></div></div><div class="col-lg-4"><div class="sg-card h-100"><div class="sg-card-heading"><h2><i class="bi bi-pie-chart-fill"></i> Verification Methods</h2></div><div class="sg-analytics-donut-wrap"><canvas id="methodAnalyticsChart"></canvas></div></div></div></div>
 <div class="row g-3 mb-3"><div class="col-lg-7"><div class="sg-card"><div class="sg-card-heading"><h2><i class="bi bi-clock-history"></i> Activity by Hour</h2></div><div class="sg-peak-hour-strip"><div><span>Peak Granted</span><strong><?=e($peakHour)?></strong><small><?=number_format($peakHourCount)?> scans</small></div><div><span>Peak Entry</span><strong><?=e($peakEntryHour)?></strong><small><?=number_format($peakEntryCount)?> entries</small></div><div><span>Peak Exit</span><strong><?=e($peakExitHour)?></strong><small><?=number_format($peakExitCount)?> exits</small></div></div><div class="sg-analytics-chart-wrap"><canvas id="hourAnalyticsChart"></canvas></div></div></div><div class="col-lg-5"><div class="sg-card"><div class="sg-card-heading"><h2><i class="bi bi-arrow-left-right"></i> Entry vs Exit</h2></div><div class="sg-analytics-donut-wrap"><canvas id="typeAnalyticsChart"></canvas></div></div></div></div>
